@@ -52,27 +52,28 @@ end TOP;
 architecture Behavioral of TOP is
 --aliases puerto JC
 alias FT245_D: STD_LOGIC_VECTOR(7 downto 0) is JB;
-alias FT245_TXEn : STD_LOGIC is JC(4); --JC7, L17 (desde 1)
-alias FT245_WRn  : STD_LOGIC is JC(5); --JC8, M19 (desde 1)
+alias FT245_RXEn : STD_LOGIC is JC(0); --JC1, K17 , -i
 alias FT245_RDn  : STD_LOGIC is JC(1); --JC2, M18 , -o
-alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18, -o
-alias FT245_SIWUn  : STD_LOGIC is JC(2);
+alias FT245_SIWUn  : STD_LOGIC is JC(2); --JC3, N17 , -o
+alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18 , -o
+alias FT245_TXEn : STD_LOGIC is JC(4); --JC7, L17 , -o
+alias FT245_WRn  : STD_LOGIC is JC(5); --JC8, M19 , -o
+alias CLOKOUT  : STD_LOGIC is JC(6); --JC9, P17 , -i
+alias PWRSAVn  : STD_LOGIC is JC(7); --JC10, R18 , -o
 
 
---seï¿½ales usadas en FT245_IF
+--señales usadas en FT245_IF, lado FPGA
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
 signal User_wr_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
+signal MRST   : STD_LOGIC := '0';
+--señales usadas en FT245_IF, lado conector
+signal FT245_D_s   : STD_LOGIC_VECTOR(7 downto 0);
 signal FT245_TXEn_s   : STD_LOGIC;
 signal FT245_WRn_s    : STD_LOGIC;
-signal FT245_D_s   : STD_LOGIC_VECTOR(7 downto 0);
-signal MRST   : STD_LOGIC := '0';
 
 
--- prueba contador
-signal cont_freq  : unsigned(32 downto 0) := (others => '0');
 signal cont_dato  : unsigned(7 downto 0) := (others => '0');
-
 begin
 -- envio contador al FT245 lo mas rapido posible
     process(clk)
@@ -89,8 +90,8 @@ begin
 
     UserDataIn <= std_logic_vector(cont_dato);
 
---instancia del controlador FT245
-    -- ===============================
+
+-- ===============================
 --    INSTANCE TEMPLATE
 -- ===============================
     FT245_inst: entity work.FT245_IF
@@ -109,7 +110,7 @@ begin
         DATA    => FT245_D_s         -- o[7:0]
     );
 
-    
+    -- conexionado del FT245_IF con el conector JB y JC.
     --FT245_D <= FT245_D_s;
     FT245_D(0) <= FT245_D_s(0);
     FT245_D(1) <= FT245_D_s(2);
@@ -121,26 +122,10 @@ begin
     FT245_D(7) <= FT245_D_s(7);
     FT245_WRn <= FT245_WRn_s;
     FT245_TXEn_s <= FT245_TXEn;
-    FT245_SIWUn <= not btnL;
-    FT245_RDn  <= '1';  -- no usados
-    FT245_OEn  <= '1';
-
-
-    LED(11) <= User_rdy_flag;
-    LED(12) <= User_wr_en;
-    LED(14) <= FT245_TXEn_s;
-    LED(15) <= FT245_WRn_s;
-    
-
---    CAT <= SW(7 downto 0);
-    seg <= FT245_D_s(6 downto 0);
-    dp  <= FT245_D_s(7);
-    AN <= btnL & btnD & btnR & btnU;
-    MRST <= btnC;
-    
-
-    
-
+    FT245_RDn <= '1';  -- no usados
+    FT245_SIWUn <= '1';  -- no usados
+    FT245_OEn <= '1';  -- no usados
+    PWRSAVn <= '0';  -- no usados
 
     
 end Behavioral;
