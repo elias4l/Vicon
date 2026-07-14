@@ -58,36 +58,6 @@ alias FT245_RDn  : STD_LOGIC is JC(1); --JC2, M18 , -o
 alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18, -o
 alias FT245_SIWUn  : STD_LOGIC is JC(2);
 
---aliases puerto JA
---alias CAM_D6: STD_LOGIC is JA(0);
---alias CAM_XCLK: STD_LOGIC is JA(1);
---alias CAM_HSYNC: STD_LOGIC is JA(2);
---alias CAM_SDA: STD_LOGIC is JA(3);
---alias CAM_PCLK: STD_LOGIC is JA(4);
---alias CAM_D7: STD_LOGIC is JA(5);
---alias CAM_VSYNC: STD_LOGIC is JA(6);
---alias CAM_SCL: STD_LOGIC is JA(7);
-
-signal  CAM_PCLK  : STD_LOGIC;
-signal  CAM_PCLK_edge  : STD_LOGIC;
-
---aliases puerto JXADC
---alias CAM_cable: STD_LOGIC is JXADC(0);
---alias CAM_D0: STD_LOGIC is JXADC(1);
---alias CAM_D2: STD_LOGIC is JXADC(2);
---alias CAM_D4: STD_LOGIC is JXADC(3);
---alias CAM_D1: STD_LOGIC is JXADC(5);
---alias CAM_D3: STD_LOGIC is JXADC(6);
---alias CAM_D5: STD_LOGIC is JXADC(7);
-
-signal  CAM_Data  : STD_LOGIC_VECTOR(7 downto 0);
-signal CAM_HSYNC  : STD_LOGIC;
-signal CAM_VSYNC  : STD_LOGIC;
-
---señales usadas en camMMCM
-signal CAM_CLK1  : STD_LOGIC;
-signal CAM_CLK2  : STD_LOGIC;
-signal CAM_CLK_locked  : STD_LOGIC;
 
 --señales usadas en FT245_IF
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
@@ -99,57 +69,29 @@ signal FT245_D_s   : STD_LOGIC_VECTOR(7 downto 0);
 signal MRST   : STD_LOGIC := '0';
 
 
--- contador, borrar
+-- prueba contador
 signal cont_freq  : unsigned(32 downto 0) := (others => '0');
 signal cont_dato  : unsigned(7 downto 0) := (others => '0');
 
---test borrar
-signal  CAM_div_22  : STD_LOGIC;
-
-
-    signal cam_div : unsigned(23 downto 0) := (others => '0'); --borrar, LED15
 begin
-    --alta impedancia para senales de entrada o no usadas en JA
---    JA(0) <= 'Z'; -- CAM_D6
---    JA(2) <= 'Z'; -- CAM_HSYNC
---    JA(4) <= 'Z'; -- CAM_PCLK
---    JA(5) <= 'Z'; -- CAM_D7
---    JA(6) <= 'Z'; -- CAM_VSYNC
-    JA(3) <= '1'; -- SDA
-    JA(7) <= '1'; -- SCL
-    
-    --reloj de 12Mhz para CAM_XCLK
-    camMMCM: entity WORK.clk_wiz_0
-    port map (
-        clk_in1 => CLK,
-        reset => MRST,
-        clk_out1 => CAM_CLK1,
-        clk_out2 => CAM_CLK2,
-        locked => CAM_CLK_locked
-    );
-    JA(1) <= CAM_CLK2;
-    
-    --borrar, LED 15 muestra el reloj 12MHz
-    process(CAM_CLK2)
+-- envio contador
+    process(clk)
     begin
-        if rising_edge(CAM_CLK2) then
-            cam_div <= cam_div + 1;
+        if rising_edge(clk) then
+            if cont_freq = 5 then
+                cont_freq <= (others => '0');
+                if User_rdy_flag = '1' then
+                    cont_dato <= cont_dato + 1;
+                    User_wr_en <= '1';
+                end if;
+            else
+                cont_freq <= cont_freq + 1;
+                User_wr_en <= '0';
+            end if;
         end if;
     end process;
-    LED(15) <= cam_div(22);
-    
-    --borrar, crear tick con flanco de subida de CAM_PCLK
-    edge_CAM_PCLK: entity work.edge_detect
-    port map (
-        clk   => CLK,
-        reset => MRST,
-        level => CAM_PCLK,
-        tick  => CAM_PCLK_edge
-    );
-    CAM_PCLK <= JA(4);
-    User_wr_en <= CAM_PCLK_edge;
-    
-    
+
+    UserDataIn <= std_logic_vector(cont_dato);
 
 --instancia del controlador FT245
     -- ===============================
@@ -170,47 +112,39 @@ begin
         WRn     => FT245_WRn_s,      -- o
         DATA    => FT245_D_s         -- o[7:0]
     );
+
     
-    FT245_D <= FT245_D_s;
+    --FT245_D <= FT245_D_s;
+    FT245_D(0) <= FT245_D_s(0);
+    FT245_D(1) <= FT245_D_s(2);
+    FT245_D(2) <= FT245_D_s(4);
+    FT245_D(3) <= FT245_D_s(6);
+    FT245_D(4) <= FT245_D_s(1);
+    FT245_D(5) <= FT245_D_s(3);
+    FT245_D(6) <= FT245_D_s(5);
+    FT245_D(7) <= FT245_D_s(7);
     FT245_WRn <= FT245_WRn_s;
     FT245_TXEn_s <= FT245_TXEn;
     FT245_SIWUn <= not btnL;
+    FT245_RDn  <= '1';  -- no usados
+    FT245_OEn  <= '1';
 
--- directly connect input signals with output signals
-    LED(14) <= FT245_WRn_s;
-    LED(13) <= FT245_TXEn_s;
-    
-    LED(12) <= User_wr_en;
+
     LED(11) <= User_rdy_flag;
-    LED(10 downto 0) <= SW(10 downto 0);
+    LED(12) <= User_wr_en;
+    LED(14) <= FT245_TXEn_s;
+    LED(15) <= FT245_WRn_s;
+    
+
 --    CAT <= SW(7 downto 0);
     seg <= FT245_D_s(6 downto 0);
     dp  <= FT245_D_s(7);
     AN <= btnL & btnD & btnR & btnU;
     MRST <= btnC;
-    FT245_RDn  <= '1';
-    FT245_OEn  <= '1';
     
-    --datos de la camara
-    CAM_Data <= JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
-    UserDataIn <= CAM_Data;
-    
-    -- envio contador
-    process(clk)
-    begin
-        if rising_edge(clk) then
-            if cont_freq = 10 then
-                cont_freq <= (others => '0');
-                if User_rdy_flag = '1' then
-                    cont_dato <= cont_dato + 1;
-                end if;
-            else
-                cont_freq <= cont_freq + 1;
-            end if;
-        end if;
-    end process;
 
-    --UserDataIn <= std_logic_vector(cont_dato);
+    
+
 
     
 end Behavioral;
