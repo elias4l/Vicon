@@ -1,0 +1,35 @@
+# Vivado
+*.jou
+*.log
+*.str
+
+.Xil/
+.xil/
+
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.srcs/
+
+# También por nombre (como tu proyecto tfm)
+*.cache
+*.hw
+*.ip_user_files
+*.runs
+*.sim
+*.gen
+*.srcs
+
+# Bitstream y salidas
+*.bit
+*.bin
+*.ltx
+*.rpt
+*.dcp
+
+# Windows
+Thumbs.db
+Desktop.ini
