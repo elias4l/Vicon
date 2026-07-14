@@ -64,17 +64,18 @@ architecture Behavioral of FIFO is
     signal contador: unsigned(B downto 0) := (others => '0'); -- La RAM va de 0 a 2**B-1 direcciones, pero el contador va de 0(EMPTY) a 2**B (FULL), por lo que se usan B + 1 bits.
 
 begin
---EC32. Modelar memoria RAM interna basada en LUTram. No usa reset (sino seria FF) y la escritura es asincrona (sino es Blockram).
+--TFM. Modelar memoria RAM interna basada en BRAM. No usa reset (sino seria FF) y la escritura es sincrona (sino es LUTram).
     process(CLK)
     begin
       if rising_edge(CLK) then
         if wr_en = '1' then -- write port, en la memoria se escribe solo cuando está HABILITADA.
           RAM(to_integer(unsigned(wr_ptr))) <= DIN; -- Los indices del array son enteros.
         end if;
+        -- read port, de la memoria se lee siempre, sin necesidad de habilitación. TFM. + de forma sincrona (BRAM).
+        DOUT <= RAM(to_integer(unsigned(rd_ptr)));
       end if;
     end process;
-    -- read port, de la memoria se lee siempre, sin necesidad de habilitación.
-    DOUT <= RAM(to_integer(unsigned(rd_ptr)));
+
 
 --EC32. Modelado del Bloque de Lógica de Control.
     process (CLK)
