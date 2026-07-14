@@ -79,7 +79,7 @@ signal  CAM_PCLK_edge  : STD_LOGIC;
 
 signal  RST  : STD_LOGIC;
 
-signal cam_div : unsigned(23 downto 0) := (others => '0'); --borrar, LED15
+signal cam_div : unsigned(28 downto 0) := (others => '0'); --borrar, LED15
 
 
 --señales usadas en FT245_IF, lado FPGA
@@ -117,8 +117,9 @@ begin
     CAM_SDA <= 'Z'; -- SDA
     CAM_SCL <= 'Z'; -- SCL
     --señales de entrada no usadas en JXAC
-    JXADC(0) <= '1'; -- JXAC1
-    JXADC(4) <= 'Z'; -- JXAC7
+-- TEST, en el Reset del MT9V111 meto un reloj de unos 5s porque es la unica forma de observar datos. Se detiene al segundo o dos.
+    JXADC(0) <= CAM_CLK_locked AND cam_div(25); -- JXAC1
+    JXADC(4) <= '1'; -- JXAC7
 
     --crear tick con flanco de subida de CAM_PCLK
     edge_CAM_PCLK: entity work.edge_detect
@@ -138,13 +139,7 @@ begin
         end if;
     end process;
     LED(15) <= cam_div(22);
-
-    led(7 downto 0) <= CAM_DATA;
-    led(8)          <= CAM_HSYNC;
-    led(9)          <= CAM_VSYNC;
-    led(10)         <= CAM_PCLK;
-    led(14)         <= CAM_CLK_locked;    
-
+    LED(14) <= CAM_CLK_locked; 
 
 -- envio contador al FT245 lo mas rapido posible
 --    process(clk)
