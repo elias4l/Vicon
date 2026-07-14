@@ -145,6 +145,8 @@ begin
     PWRSAVn <= '0';  -- no usados 
 
     --instancia de la FIFO
+    --B = anchura del Bus de direcciones.
+    --W = anchura de los buses de datos DIN y DOUT.
     -- ===============================
     --    INSTANCE TEMPLATE
     -- ===============================
@@ -163,9 +165,19 @@ begin
     );
 
     -- conexionado de la FIFO y del FT245_IF
-    UserDataIn <= FIFO_DOUT;
     FIFO_POP <= btnU_tick and User_rdy_flag and not FIFO_EMPTY;
-    User_wr_en <= btnU_tick and User_rdy_flag and not FIFO_EMPTY;
+    User_wr_en <= FIFO_POP;
+
+    process(clk)
+    begin
+        if rising_edge(clk) then
+            if MRST = '1' then
+                UserDataIn <= (others => '0');
+            elsif FIFO_POP = '1' then
+                UserDataIn <= FIFO_DOUT;
+            end if;
+        end if;
+    end process;
 
     -- conexionado de la FIFO y de los pulsadores btnD y btnU
     FIFO_PUSH <= btnD_tick and not FIFO_FULL;

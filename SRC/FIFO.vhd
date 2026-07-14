@@ -90,8 +90,8 @@ begin
                     wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
                 end if;
             elsif rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
-                if unsigned(rd_ptr) = 0 then
-                    rd_ptr <= std_logic_vector(to_unsigned(2**B-1, B));
+                if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then
+                    rd_ptr <= (others => '0');
                 else
                     rd_ptr <= std_logic_vector(unsigned(rd_ptr) + 1);
                 end if;
