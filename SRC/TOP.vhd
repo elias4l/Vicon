@@ -59,7 +59,7 @@ alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18, -o
 alias FT245_SIWUn  : STD_LOGIC is JC(2);
 
 
---señales usadas en FT245_IF
+--seï¿½ales usadas en FT245_IF
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
 signal User_wr_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
@@ -74,18 +74,14 @@ signal cont_freq  : unsigned(32 downto 0) := (others => '0');
 signal cont_dato  : unsigned(7 downto 0) := (others => '0');
 
 begin
--- envio contador
+-- envio contador al FT245 lo mas rapido posible
     process(clk)
     begin
         if rising_edge(clk) then
-            if cont_freq = 5 then
-                cont_freq <= (others => '0');
-                if User_rdy_flag = '1' then
-                    cont_dato <= cont_dato + 1;
-                    User_wr_en <= '1';
-                end if;
+            if User_rdy_flag = '1' then
+                User_wr_en <= '1';
+                cont_dato <= cont_dato + 1;
             else
-                cont_freq <= cont_freq + 1;
                 User_wr_en <= '0';
             end if;
         end if;

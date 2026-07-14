@@ -68,7 +68,7 @@ end FT245_IF;
 
 --EC34. Modelaremos la FSM para el control de escritura as ncrono en un interfaz tipo FT245.
 architecture Behavioral of FT245_IF is
-    type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3);
+    type state_type is (idle, write_1);
     signal state_reg, state_next: state_type;
 --EC34. Trabajar con la versi n sincronizada de TXEn
     signal synchronizer: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
@@ -109,41 +109,17 @@ begin
         when idle =>
             ready_next <= '1';
             WRn_next <= '1';
-            if (wr_en = '1') then 
-                state_next <= wait_for_TXE;
+            if (wr_en = '1' and TXEn_sync = '0') then
+                salida_next <= DIN;
+                ready_next <= '0';
+                WRn_next <= '0';
+                state_next <= write_1;
             end if;
-            
-        when wait_for_TXE =>
-            ready_next <= '0';
-            WRn_next <= '1';
-            if (TXEn_sync = '0') then 
-                state_next <= output_data;
-            end if;
-        
-        when output_data =>
-            ready_next <= '0';
-            WRn_next <= '1';
-            salida_next <= Din;
-            state_next <= write_1;
         
         when write_1 =>
             ready_next <= '0';
-            WRn_next <= '0';
-            state_next <= write_2;
-        
-        when write_2 =>
-            ready_next <= '0';
-            WRn_next <= '0';
-            state_next <= write_3;
-        
-        when write_3 =>
-            ready_next <= '0';
-            WRn_next <= '0';
-            if (wr_en = '0') then 
-                state_next <= idle;
-            elsif (wr_en = '1') then 
-                state_next <= wait_for_TXE;
-            end if;
+            WRn_next <= '1';
+            state_next <= idle;
     end case;
     end process COMB;
     
