@@ -44,9 +44,6 @@ entity FIFO is
             FULL  : out std_logic;
             DOUT  : out std_logic_vector(W-1 downto 0);
             POP   : in std_logic;
-            CNT :out std_logic_vector(B downto 0);
-            wr:out std_logic_vector(B-1 downto 0);
-            rd:out std_logic_vector(B-1 downto 0);
             EMPTY : out std_logic);
 end FIFO;
 
@@ -93,8 +90,8 @@ begin
                     wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
                 end if;
             elsif rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
-                if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then -- tamaño del bus de direcciones es B.
-                    rd_ptr <= (others => '0');  -- memoria RAM circular.
+                if unsigned(rd_ptr) = 0 then
+                    rd_ptr <= std_logic_vector(to_unsigned(2**B-1, B));
                 else
                     rd_ptr <= std_logic_vector(unsigned(rd_ptr) + 1);
                 end if;
@@ -129,8 +126,5 @@ begin
     EMPTY <= empty_aux;
     FULL <= full_aux;
 
-CNT <= std_logic_vector(contador);
-wr <= wr_ptr;
-rd <= rd_ptr;
 
 end Behavioral;
