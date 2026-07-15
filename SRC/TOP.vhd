@@ -1,21 +1,6 @@
 ----------------------------------------------------------------------------------
--- Company: 
--- Engineer: Emilio Elias Sujar Overbury
--- 
--- Create Date: 07.01.2025 21:53:43
--- Design Name: Ejercicio primero.
--- Module Name: TOP - Behavioral
--- Project Name: Primero.
--- Target Devices: Artix 7 xc7a35t
--- Tool Versions: Vivado 2019.1
--- Description: This is an exercise project. With the eight LSB switches you control the 7-segments cathodes. With the buttons (except BTNC) you control the 7-segments anodes. Each LED is controlled by one switch or one button.
--- 
--- Dependencies: 
--- 
--- Revision:
--- Revision 0.01 - File Created
--- Additional Comments:
--- 
+-- Uso de la FIFO creada en EC32.
+-- Incialmente se aÃ±aden bytes a la FIFO pulsando btnD y se mandan al FT245 pulsando btnU.
 ----------------------------------------------------------------------------------
 
 
@@ -43,116 +28,106 @@ entity TOP is
            -- FT245
            clk : in STD_LOGIC;
            JA : inout STD_LOGIC_VECTOR(7 downto 0);
-           JB : out STD_LOGIC_VECTOR(7 downto 0);
+           JB : inout STD_LOGIC_VECTOR(7 downto 0); -- Ahora DATA es inout.
            JC : inout STD_LOGIC_VECTOR(7 downto 0);
            JXADC : in STD_LOGIC_VECTOR(7 downto 0));
 
 end TOP;
 
+
 architecture Behavioral of TOP is
 --aliases puerto JC
 alias FT245_D: STD_LOGIC_VECTOR(7 downto 0) is JB;
-alias FT245_TXEn : STD_LOGIC is JC(4); --JC7, L17 (desde 1)
-alias FT245_WRn  : STD_LOGIC is JC(5); --JC8, M19 (desde 1)
+alias FT245_RXEn : STD_LOGIC is JC(0); --JC1, K17 , -i
 alias FT245_RDn  : STD_LOGIC is JC(1); --JC2, M18 , -o
-alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18, -o
-alias FT245_SIWUn  : STD_LOGIC is JC(2);
+alias FT245_SIWUn  : STD_LOGIC is JC(2); --JC3, N17 , -o
+alias FT245_OEn  : STD_LOGIC is JC(3); --JC4, P18 , -o
+alias FT245_TXEn : STD_LOGIC is JC(4); --JC7, L17 , -i
+alias FT245_WRn  : STD_LOGIC is JC(5); --JC8, M19 , -o
+alias CLOKOUT  : STD_LOGIC is JC(6); --JC9, P17 , -i
+alias PWRSAVn  : STD_LOGIC is JC(7); --JC10, R18 , -o
 
---aliases puerto JA
---alias CAM_D6: STD_LOGIC is JA(0);
---alias CAM_XCLK: STD_LOGIC is JA(1);
---alias CAM_HSYNC: STD_LOGIC is JA(2);
---alias CAM_SDA: STD_LOGIC is JA(3);
---alias CAM_PCLK: STD_LOGIC is JA(4);
---alias CAM_D7: STD_LOGIC is JA(5);
---alias CAM_VSYNC: STD_LOGIC is JA(6);
---alias CAM_SCL: STD_LOGIC is JA(7);
-
-signal  CAM_PCLK  : STD_LOGIC;
-signal  CAM_PCLK_edge  : STD_LOGIC;
-
---aliases puerto JXADC
---alias CAM_cable: STD_LOGIC is JXADC(0);
---alias CAM_D0: STD_LOGIC is JXADC(1);
---alias CAM_D2: STD_LOGIC is JXADC(2);
---alias CAM_D4: STD_LOGIC is JXADC(3);
---alias CAM_D1: STD_LOGIC is JXADC(5);
---alias CAM_D3: STD_LOGIC is JXADC(6);
---alias CAM_D5: STD_LOGIC is JXADC(7);
-
-signal  CAM_Data  : STD_LOGIC_VECTOR(7 downto 0);
-signal CAM_HSYNC  : STD_LOGIC;
-signal CAM_VSYNC  : STD_LOGIC;
-
---señales usadas en camMMCM
-signal CAM_CLK1  : STD_LOGIC;
-signal CAM_CLK2  : STD_LOGIC;
-signal CAM_CLK_locked  : STD_LOGIC;
-
---señales usadas en FT245_IF
+--señales usadas en FT245_IF, lado FPGA
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
+signal UserDataOut  : STD_LOGIC_VECTOR(7 downto 0);
 signal User_wr_en  : STD_LOGIC;
+signal User_rd_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
-signal FT245_TXEn_s   : STD_LOGIC;
-signal FT245_WRn_s    : STD_LOGIC;
-signal FT245_D_s   : STD_LOGIC_VECTOR(7 downto 0);
 signal MRST   : STD_LOGIC := '0';
 
 
--- contador, borrar
-signal cont_freq  : unsigned(32 downto 0) := (others => '0');
-signal cont_dato  : unsigned(7 downto 0) := (others => '0');
+--signal cont_dato  : unsigned(7 downto 0) := (others => '0');
 
---test borrar
-signal  CAM_div_22  : STD_LOGIC;
+--señales usadas en la FIFO
+signal FIFO_DIN : STD_LOGIC_VECTOR(7 downto 0);
+signal FIFO_PUSH : STD_LOGIC;
+signal FIFO_FULL : STD_LOGIC;
+signal FIFO_DOUT : STD_LOGIC_VECTOR(7 downto 0);
+signal FIFO_POP : STD_LOGIC;
+signal FIFO_EMPTY : STD_LOGIC;
+
+--señales de botones sin rebote
+signal btnD_db : std_logic;
+signal btnU_db : std_logic;
+signal btnR_db : std_logic;
+
+signal btnD_tick : std_logic;
+signal btnU_tick : std_logic;
+signal btnR_tick : std_logic;
 
 
-    signal cam_div : unsigned(23 downto 0) := (others => '0'); --borrar, LED15
 begin
-    --alta impedancia para senales de entrada o no usadas en JA
---    JA(0) <= 'Z'; -- CAM_D6
---    JA(2) <= 'Z'; -- CAM_HSYNC
---    JA(4) <= 'Z'; -- CAM_PCLK
---    JA(5) <= 'Z'; -- CAM_D7
---    JA(6) <= 'Z'; -- CAM_VSYNC
-    JA(3) <= '1'; -- SDA
-    JA(7) <= '1'; -- SCL
-    
-    --reloj de 12Mhz para CAM_XCLK
-    camMMCM: entity WORK.clk_wiz_0
-    port map (
-        clk_in1 => CLK,
-        reset => MRST,
-        clk_out1 => CAM_CLK1,
-        clk_out2 => CAM_CLK2,
-        locked => CAM_CLK_locked
-    );
-    JA(1) <= CAM_CLK2;
-    
-    --borrar, LED 15 muestra el reloj 12MHz
-    process(CAM_CLK2)
-    begin
-        if rising_edge(CAM_CLK2) then
-            cam_div <= cam_div + 1;
-        end if;
-    end process;
-    LED(15) <= cam_div(22);
-    
-    --borrar, crear tick con flanco de subida de CAM_PCLK
-    edge_CAM_PCLK: entity work.edge_detect
+--botones usados sin rebote
+    btnD_db_inst : entity work.db_fsm
     port map (
         clk   => CLK,
         reset => MRST,
-        level => CAM_PCLK,
-        tick  => CAM_PCLK_edge
+        sw    => btnD,
+        db    => btnD_db
     );
-    CAM_PCLK <= JA(4);
-    User_wr_en <= CAM_PCLK_edge;
-    
-    
+
+    btnU_db_inst : entity work.db_fsm
+    port map (
+        clk   => CLK,
+        reset => MRST,
+        sw    => btnU,
+        db    => btnU_db
+    );
+
+    btnR_db_inst : entity work.db_fsm
+    port map (
+        clk   => CLK,
+        reset => MRST,
+        sw    => btnR,
+        db    => btnR_db
+    );
+
+    btnD_edge_inst : entity work.edge_detect
+    port map (
+        clk   => CLK,
+        reset => MRST,
+        level => btnD_db,
+        tick  => btnD_tick
+    );
+
+    btnU_edge_inst : entity work.edge_detect
+    port map (
+        clk   => CLK,
+        reset => MRST,
+        level => btnU_db,
+        tick  => btnU_tick
+    );
+
+    btnR_edge_inst : entity work.edge_detect
+    port map (
+        clk   => CLK,
+        reset => MRST,
+        level => btnR_db,
+        tick  => btnR_tick
+    );
 
 --instancia del controlador FT245
-    -- ===============================
+-- ===============================
 --    INSTANCE TEMPLATE
 -- ===============================
     FT245_inst: entity work.FT245_IF
@@ -163,54 +138,92 @@ begin
     -- User IO ---------------------------
         DIN     => UserDataIn,     -- i[7:0]
         wr_en   => User_wr_en,     -- i
+        DOUT    => UserDataOut,    -- o[7:0] -- modo RX
+        rd_en   => User_rd_en,     -- i -- modo RX
         ready   => User_rdy_flag,  -- o
     
     -- FT245-like interface --------------
-        TXEn    => FT245_TXEn_s,     -- i
-        WRn     => FT245_WRn_s,      -- o
-        DATA    => FT245_D_s         -- o[7:0]
+        TXEn    => FT245_TXEn,     -- i
+        WRn     => FT245_WRn,      -- o
+        RDn     => FT245_RDn,       -- o -- modo RX
+        RXEn    => FT245_RXEn,     -- o -- modo RX
+        DATA(0) => FT245_D(0),
+        DATA(1) => FT245_D(2),
+        DATA(2) => FT245_D(4),
+        DATA(3) => FT245_D(6),
+        DATA(4) => FT245_D(1),
+        DATA(5) => FT245_D(3),
+        DATA(6) => FT245_D(5),
+        DATA(7) => FT245_D(7)
     );
-    
-    FT245_D <= FT245_D_s;
-    FT245_WRn <= FT245_WRn_s;
-    FT245_TXEn_s <= FT245_TXEn;
-    FT245_SIWUn <= not btnL;
 
--- directly connect input signals with output signals
-    LED(14) <= FT245_WRn_s;
-    LED(13) <= FT245_TXEn_s;
-    
-    LED(12) <= User_wr_en;
-    LED(11) <= User_rdy_flag;
-    LED(10 downto 0) <= SW(10 downto 0);
---    CAT <= SW(7 downto 0);
-    seg <= FT245_D_s(6 downto 0);
-    dp  <= FT245_D_s(7);
-    AN <= btnL & btnD & btnR & btnU;
-    MRST <= btnC;
-    FT245_RDn  <= '1';
-    FT245_OEn  <= '1';
-    
-    --datos de la camara
-    CAM_Data <= JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
-    UserDataIn <= CAM_Data;
-    
-    -- envio contador
+    -- conexionado restante del FT245_IF con el conector JB y JC.
+    FT245_SIWUn <= '1';  -- no usados
+    FT245_OEn <= '1';  -- no usados, solo para modo sincrono.
+    PWRSAVn <= '0';  -- no usados 
+
+    --instancia de la FIFO
+    --B = anchura del Bus de direcciones.
+    --W = anchura de los buses de datos DIN y DOUT.
+    -- ===============================
+    --    INSTANCE TEMPLATE
+    -- ===============================
+    FIFO_inst : entity work.FIFO
+    port map (
+        CLK   => CLK,
+        RST   => MRST,
+
+        DIN   => FIFO_DIN,
+        PUSH  => FIFO_PUSH,
+        FULL  => FIFO_FULL,
+
+        DOUT  => FIFO_DOUT,
+        POP   => FIFO_POP,
+        EMPTY => FIFO_EMPTY
+    );
+
+    -- conexionado de la FIFO y del FT245_IF
+    FIFO_POP <= btnU_tick and User_rdy_flag and not FIFO_EMPTY;
+    User_wr_en <= FIFO_POP;
+
     process(clk)
     begin
         if rising_edge(clk) then
-            if cont_freq = 10 then
-                cont_freq <= (others => '0');
-                if User_rdy_flag = '1' then
-                    cont_dato <= cont_dato + 1;
-                end if;
-            else
-                cont_freq <= cont_freq + 1;
+            if MRST = '1' then
+                UserDataIn <= (others => '0');
+            elsif FIFO_POP = '1' then
+                UserDataIn <= FIFO_DOUT;
             end if;
         end if;
     end process;
 
-    --UserDataIn <= std_logic_vector(cont_dato);
+    -- conexionado de la FIFO y de los pulsadores btnD y btnU
+    FIFO_PUSH <= btnD_tick and not FIFO_FULL;
 
-    
+
+    -- conexionado BtnR y modo RX del FT245_IF
+    User_rd_en <= btnR_tick and User_rdy_flag;
+    LED(7 downto 0) <= UserDataOut;
+
+-- envio contador al FT245 lo mas rapido posible
+--    process(clk)
+--    begin
+--        if rising_edge(clk) then
+--            if User_rdy_flag = '1' then
+--                User_wr_en <= '1';
+--                cont_dato <= cont_dato + 1;
+--            else
+--                User_wr_en <= '0';
+--            end if;
+--        end if;
+--    end process;
+
+    --FIFO_DIN <= cont_dato;
+    FIFO_DIN <= sw(7 downto 0);
+
+    --indicadores
+    seg <= SW(6 downto 0);
+    dp  <= '1';
+    an <= "1110";
+    MRST <= btnC;
 end Behavioral;

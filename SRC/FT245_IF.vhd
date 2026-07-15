@@ -10,9 +10,9 @@
 -- Tool Versions: 
 -- Description: This proyect implements a FSM that controls asyncronous writing on a FT245 interface. MCLK operates at 100MHz.
 -- There are two main segments, one secuencial process for state control (with asyncronous reset), and one combinational process for next state and other signals.
--- Inut signal TXEn is syncronized by passing through two FF.
+-- Input signal TXEn is syncronized by passing through two FF.
 -- Template instance example is shown for reference.
--- 
+-- ADDED RX.
 -- Dependencies: 
 -- 
 -- Revision:
@@ -46,11 +46,15 @@ use IEEE.STD_LOGIC_1164.ALL;
     -- User IO ---------------------------
 --     DIN     => UserDataIn,     -- i[7:0]
 --     wr_en   => User_wr_en,     -- i
+--     DOUT    => UserDataOut,    -- o[7:0]
+--     rd_en   => User_rd_en,     -- i
 --     ready   => User_rdy_flag,  -- o
     
     -- FT245-like interface --------------
 --     TXEn    => FT245_TXEn,     -- i
 --     WRn     => FT245_WRn,      -- o
+--     RXEn    => FT245_RXEn,     -- i
+--     RDn     => FT245_RDn,      -- o
 --     DATA    => FT245_D         -- o[7:0]
 -- );
 
@@ -60,60 +64,143 @@ entity FT245_IF is
            reset : in STD_LOGIC;
            DIN : in STD_LOGIC_VECTOR (7 downto 0);
            wr_en : in STD_LOGIC;
+           DOUT : out STD_LOGIC_VECTOR (7 downto 0);
+           rd_en : in STD_LOGIC;
            ready : out STD_LOGIC;
            TXEn : in STD_LOGIC;
            WRn : out STD_LOGIC;
-           DATA : out STD_LOGIC_VECTOR (7 downto 0));
+           RXEn : in STD_LOGIC;
+           RDn : out STD_LOGIC;
+           DATA : inout STD_LOGIC_VECTOR (7 downto 0));
 end FT245_IF;
 
 --EC34. Modelaremos la FSM para el control de escritura as ncrono en un interfaz tipo FT245.
 architecture Behavioral of FT245_IF is
-    type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3);
+    type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3,
+                        wait_for_RXE, read_wait_1, read_wait_2, read_data, read_data_stop,
+                        wait_for_RXE_UP, wait_RXE_1, wait_RXE_2, wait_RXE_3, wait_RXE_4, wait_RXE_5);
     signal state_reg, state_next: state_type;
 --EC34. Trabajar con la versi n sincronizada de TXEn
-    signal synchronizer: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
+    signal synchronizer_tx: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
+    signal synchronizer_rx: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
     signal TXEn_sync: STD_LOGIC;
+    signal RXEn_sync: STD_LOGIC;
     
-    signal salida_next, salida_reg: STD_LOGIC_VECTOR (7 downto 0); -- para cada salida, crearemos dos se ales internas.
+    signal entrada_next, entrada_reg: STD_LOGIC_VECTOR (7 downto 0); -- para cada entrada, crearemos dos señales internas.
+    signal salida_next, salida_reg: STD_LOGIC_VECTOR (7 downto 0); -- para cada salida, crearemos dos señales internas.
+    signal RDn_next, RDn_reg: STD_LOGIC;
     signal WRn_next, WRn_reg: STD_LOGIC;
     signal ready_next, ready_reg: STD_LOGIC;
 
+    signal modo_rx_reg, modo_rx_next: STD_LOGIC; -- 1 indica DATA en modo in, 0 indica DATA en modo out.
+
 begin
---EC34. Utilizaremos dos segmentos de c digo:
+--EC34. Utilizaremos dos segmentos de código:
 --  un proceso para modelar el registro de estado. Unico bloque sincrono.
-    REG: process (clk, reset) -- el reset de la FSM debe ser AS NCRONO.
+    REG: process (clk, reset) -- el reset de la FSM debe ser ASÍNCRONO.
     begin
         if reset='1' then
             state_reg <= idle;
+            entrada_reg <= (others => '0');
             salida_reg <= (others => '0');
+            modo_rx_reg <= '0'; -- por defecto DATA en modo out.
             ready_reg <= '1';   -- idle
             WRn_reg <= '1'; -- idle;
+            RDn_reg <= '1'; -- idle;
+            modo_rx_reg <= '0'; -- idle, por defecto DATA en modo out.
         elsif rising_edge(clk) then-- Las salidas deben ser registradas: olvida si son tipo Moore o Mealy.
             state_reg <= state_next;
+            entrada_reg <= entrada_next;
             salida_reg <= salida_next;
-            WRn_reg <= WRn_next;
+            modo_rx_reg <= modo_rx_next;
             ready_reg <= ready_next;
+            WRn_reg <= WRn_next;
+            RDn_reg <= RDn_next;
+            modo_rx_reg <= modo_rx_next;
         end if; -- proceso sincrono, no necesita sentencia else.
     end process REG;
         
     
---  otro proceso para modelar la l gica de estado siguiente. 
-    COMB: process (state_reg, DIN, wr_en, TXEn_sync)    
+--  otro proceso para modelar la lógica de estado siguiente. 
+    COMB: process (state_reg, DIN, rd_en, wr_en, TXEn_sync, RXEn_sync, DATA, entrada_reg, salida_reg, ready_reg, WRn_reg, RDn_reg, modo_rx_reg) 
     begin
-    --EC34. Asignaci n por defecto: simplifica el c digo y evita LATCHES no deseados.
+    --EC34. Asignación por defecto: simplifica el código y evita LATCHES no deseados.
     state_next <= state_reg;
+    entrada_next <= entrada_reg;
     salida_next <= salida_reg;
     ready_next <= ready_reg;
     WRn_next <= WRn_reg;
+    RDn_next <= RDn_reg;
     case state_reg is
         when idle =>
+            modo_rx_next <= '0'; -- por defecto DATA en modo out.
             ready_next <= '1';
             WRn_next <= '1';
-            if (wr_en = '1') then 
+            RDn_next <= '1';
+            if (rd_en = '1') then 
+                state_next <= wait_for_RXE;
+            elsif (wr_en = '1') then 
                 state_next <= wait_for_TXE;
             end if;
-            
+    --TFM. Parte dedicada a la lectura asincrona.
+        when wait_for_RXE =>
+            modo_rx_next <= '1'; -- DATA en modo in.
+            ready_next <= '0';
+            RDn_next <= '1';
+            WRn_next <= '1';    -- por si viene desde write_3.
+            if (RXEn_sync = '0') then 
+                state_next <= read_wait_1;
+            end if;
+        when read_wait_1 =>
+            ready_next <= '0';
+            RDn_next <= '0'; -- Ahora el FT245 comienza el proceso de mostrar el siguiente dato en el bus de datos.
+            state_next <= read_wait_2;
+        when read_wait_2 =>
+            ready_next <= '0';
+            RDn_next <= '0';
+            state_next <= read_data;
+        when read_data =>
+            ready_next <= '0';
+            RDn_next <= '0';
+            entrada_next <= DATA;
+            state_next <= read_data_stop;
+        when read_data_stop =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            state_next <= wait_for_RXE_UP;
+        when wait_for_RXE_UP =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            if (RXEn_sync = '1') then 
+                state_next <= wait_RXE_1;
+            end if;
+        when wait_RXE_1 =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            state_next <= wait_RXE_2;
+        when wait_RXE_2 =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            state_next <= wait_RXE_3;
+        when wait_RXE_3 =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            state_next <= wait_RXE_4;
+        when wait_RXE_4 =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            state_next <= wait_RXE_5;
+        when wait_RXE_5 =>
+            ready_next <= '0';
+            RDn_next <= '1';
+            if (rd_en = '0') then 
+                state_next <= idle;
+            elsif (rd_en = '1') then 
+                state_next <= wait_for_RXE;
+            end if;
+    --TFM. Parte anterior, dedicada a la escritura asincrona.  
         when wait_for_TXE =>
+            modo_rx_next <= '0'; -- DATA en modo out.
             ready_next <= '0';
             WRn_next <= '1';
             if (TXEn_sync = '0') then 
@@ -123,7 +210,7 @@ begin
         when output_data =>
             ready_next <= '0';
             WRn_next <= '1';
-            salida_next <= Din;
+            salida_next <= DIN;
             state_next <= write_1;
         
         when write_1 =>
@@ -139,24 +226,34 @@ begin
         when write_3 =>
             ready_next <= '0';
             WRn_next <= '0';
-            if (wr_en = '0') then 
-                state_next <= idle;
+            if (rd_en = '1') then 
+                state_next <= wait_for_RXE;
             elsif (wr_en = '1') then 
                 state_next <= wait_for_TXE;
+            else
+                state_next <= idle;
             end if;
     end case;
     end process COMB;
     
     ready <= ready_reg;
     WRn <= WRn_reg;
-    DATA <= salida_reg;
+    RDn <= RDn_reg;
+    DATA <= (others => 'Z') when modo_rx_reg = '1' else salida_reg; -- TFM. Alta impedancia si esta en modo rx, salida_reg si esta en modo tx.
+    DOUT <= entrada_reg; -- TFM. Salida de lectura asincrona.
 
 -- EC34. Modelaremos un simple sincronizador de 2 FF. Codigo copiado de M24.
     process begin
         wait until rising_edge(clk);
-        synchronizer <= TXEn & synchronizer(2 downto 1);
+        synchronizer_tx <= TXEn & synchronizer_tx(2 downto 1);
     end process;
-    TXEn_sync <= synchronizer(0);
+    TXEn_sync <= synchronizer_tx(0);
+    
+    process begin
+        wait until rising_edge(clk);
+        synchronizer_rx <= RXEn & synchronizer_rx(2 downto 1);
+    end process;
+    RXEn_sync <= synchronizer_rx(0);
 
 end Behavioral;
 

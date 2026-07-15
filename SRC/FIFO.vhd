@@ -44,9 +44,6 @@ entity FIFO is
             FULL  : out std_logic;
             DOUT  : out std_logic_vector(W-1 downto 0);
             POP   : in std_logic;
-            CNT :out std_logic_vector(B downto 0);
-            wr:out std_logic_vector(B-1 downto 0);
-            rd:out std_logic_vector(B-1 downto 0);
             EMPTY : out std_logic);
 end FIFO;
 
@@ -67,17 +64,18 @@ architecture Behavioral of FIFO is
     signal contador: unsigned(B downto 0) := (others => '0'); -- La RAM va de 0 a 2**B-1 direcciones, pero el contador va de 0(EMPTY) a 2**B (FULL), por lo que se usan B + 1 bits.
 
 begin
---EC32. Modelar memoria RAM interna basada en LUTram. No usa reset (sino seria FF) y la escritura es asincrona (sino es Blockram).
+--TFM. Modelar memoria RAM interna basada en BRAM. No usa reset (sino seria FF) y la escritura es sincrona (sino es LUTram).
     process(CLK)
     begin
       if rising_edge(CLK) then
         if wr_en = '1' then -- write port, en la memoria se escribe solo cuando está HABILITADA.
           RAM(to_integer(unsigned(wr_ptr))) <= DIN; -- Los indices del array son enteros.
         end if;
+        -- read port, de la memoria se lee siempre, sin necesidad de habilitación. TFM. + de forma sincrona (BRAM).
+        DOUT <= RAM(to_integer(unsigned(rd_ptr)));
       end if;
     end process;
-    -- read port, de la memoria se lee siempre, sin necesidad de habilitación.
-    DOUT <= RAM(to_integer(unsigned(rd_ptr)));
+
 
 --EC32. Modelado del Bloque de Lógica de Control.
     process (CLK)
@@ -93,8 +91,8 @@ begin
                     wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
                 end if;
             elsif rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
-                if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then -- tamaño del bus de direcciones es B.
-                    rd_ptr <= (others => '0');  -- memoria RAM circular.
+                if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then
+                    rd_ptr <= (others => '0');
                 else
                     rd_ptr <= std_logic_vector(unsigned(rd_ptr) + 1);
                 end if;
@@ -129,8 +127,5 @@ begin
     EMPTY <= empty_aux;
     FULL <= full_aux;
 
-CNT <= std_logic_vector(contador);
-wr <= wr_ptr;
-rd <= rd_ptr;
 
 end Behavioral;
