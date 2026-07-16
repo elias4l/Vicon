@@ -1,5 +1,5 @@
 Resumen:
 
 
-cd C:/Users/elias/Desktop/mei_practicas/tfm/V_0_0_1/SRC
-source sim.tcl
+cd C:/Users/elias/Desktop/mei_practicas/tfm/Vicon/SRC
+source FT245_IF.tcl

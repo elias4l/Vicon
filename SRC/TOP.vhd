@@ -148,19 +148,19 @@ begin
         RDn     => FT245_RDn,       -- o -- modo RX
         RXEn    => FT245_RXEn,     -- o -- modo RX
         DATA(0) => FT245_D(0),
-        DATA(1) => FT245_D(2),
-        DATA(2) => FT245_D(4),
-        DATA(3) => FT245_D(6),
-        DATA(4) => FT245_D(1),
-        DATA(5) => FT245_D(3),
-        DATA(6) => FT245_D(5),
+        DATA(1) => FT245_D(4),
+        DATA(2) => FT245_D(1),
+        DATA(3) => FT245_D(5),
+        DATA(4) => FT245_D(2),
+        DATA(5) => FT245_D(6),
+        DATA(6) => FT245_D(3),
         DATA(7) => FT245_D(7)
     );
 
     -- conexionado restante del FT245_IF con el conector JB y JC.
     FT245_SIWUn <= '1';  -- no usados
     FT245_OEn <= '1';  -- no usados, solo para modo sincrono.
-    PWRSAVn <= '0';  -- no usados 
+    PWRSAVn <= '1';  -- no usados 
 
     --instancia de la FIFO
     --B = anchura del Bus de direcciones.

@@ -92,7 +92,7 @@ architecture Behavioral of FT245_IF is
     signal WRn_next, WRn_reg: STD_LOGIC;
     signal ready_next, ready_reg: STD_LOGIC;
 
-    signal modo_rx_reg, modo_rx_next: STD_LOGIC; -- 1 indica DATA en modo in, 0 indica DATA en modo out.
+    signal modo_rx_reg, modo_rx_next: STD_LOGIC; -- 1 la FPGA libera DATA para recibir, 0 la FPGA conduce DATA para transmitir.
 
 begin
 --EC34. Utilizaremos dos segmentos de código:
@@ -103,16 +103,14 @@ begin
             state_reg <= idle;
             entrada_reg <= (others => '0');
             salida_reg <= (others => '0');
-            modo_rx_reg <= '0'; -- por defecto DATA en modo out.
             ready_reg <= '1';   -- idle
             WRn_reg <= '1'; -- idle;
             RDn_reg <= '1'; -- idle;
-            modo_rx_reg <= '0'; -- idle, por defecto DATA en modo out.
+            modo_rx_reg <= '0'; -- idle, por defecto bus DATA capturado para transmitir.
         elsif rising_edge(clk) then-- Las salidas deben ser registradas: olvida si son tipo Moore o Mealy.
             state_reg <= state_next;
             entrada_reg <= entrada_next;
             salida_reg <= salida_next;
-            modo_rx_reg <= modo_rx_next;
             ready_reg <= ready_next;
             WRn_reg <= WRn_next;
             RDn_reg <= RDn_next;
@@ -131,9 +129,10 @@ begin
     ready_next <= ready_reg;
     WRn_next <= WRn_reg;
     RDn_next <= RDn_reg;
+    modo_rx_next <= modo_rx_reg;
     case state_reg is
         when idle =>
-            modo_rx_next <= '0'; -- por defecto DATA en modo out.
+            modo_rx_next <= '0'; -- bus DATA capturado.
             ready_next <= '1';
             WRn_next <= '1';
             RDn_next <= '1';
@@ -144,7 +143,7 @@ begin
             end if;
     --TFM. Parte dedicada a la lectura asincrona.
         when wait_for_RXE =>
-            modo_rx_next <= '1'; -- DATA en modo in.
+            modo_rx_next <= '1'; -- bus DATA liberado, se va a leer un dato.
             ready_next <= '0';
             RDn_next <= '1';
             WRn_next <= '1';    -- por si viene desde write_3.
@@ -165,6 +164,7 @@ begin
             entrada_next <= DATA;
             state_next <= read_data_stop;
         when read_data_stop =>
+            modo_rx_next <= '0'; -- bus DATA capturado.
             ready_next <= '0';
             RDn_next <= '1';
             state_next <= wait_for_RXE_UP;
@@ -200,7 +200,6 @@ begin
             end if;
     --TFM. Parte anterior, dedicada a la escritura asincrona.  
         when wait_for_TXE =>
-            modo_rx_next <= '0'; -- DATA en modo out.
             ready_next <= '0';
             WRn_next <= '1';
             if (TXEn_sync = '0') then 
