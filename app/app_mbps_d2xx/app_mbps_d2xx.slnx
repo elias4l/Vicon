@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="app_mbps_d2xx.vcxproj" Id="06a1dd1c-16dc-4477-9d4d-19ef4d40a676" />
+</Solution>
