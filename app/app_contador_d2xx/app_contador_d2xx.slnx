@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="app_contador_d2xx.vcxproj" Id="c81d7d48-deb0-4158-bf23-6b7bb1ff1b6e" />
+</Solution>

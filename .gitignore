@@ -32,3 +32,54 @@
 # Windows
 Thumbs.db
 Desktop.ini
+
+# =========================
+# Visual Studio / C++
+# =========================
+
+# Configuración local de Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Carpetas de compilación
+x64/
+x86/
+Win32/
+Debug/
+Release/
+bin/
+obj/
+
+# Archivos generados al compilar
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.idb
+*.pch
+*.ipch
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
+*.recipe
+
+# Bases de datos/cache de Visual Studio
+*.VC.db
+*.VC.VC.opendb
+*.opensdf
+*.sdf
+
+# Logs
+*.log
+
+# Backups
+*_old.cpp
+*_old.h
+*.bak
+
+# Carpeta temporal/generada específica
+app_cont.c81d7d48/
