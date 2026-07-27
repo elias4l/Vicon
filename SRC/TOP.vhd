@@ -202,7 +202,7 @@ begin
 
 
     -- conexionado BtnR y modo RX del FT245_IF
-    User_rd_en <= btnR_tick and User_rdy_flag;
+    User_rd_en <= btnR;
     LED(7 downto 0) <= UserDataOut;
 
 -- envio contador al FT245 lo mas rapido posible

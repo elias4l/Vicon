@@ -15,7 +15,54 @@ int main() {
     FT_HANDLE ftHandle = nullptr;
     FT_STATUS ftStatus;
 
-    ftStatus = FT_Open(2, &ftHandle); // Cambiar si es necesario.
+// Bloque para imprimir los dispositivos FTDI conectados.
+    DWORD numDevs = 0;
+    ftStatus = FT_CreateDeviceInfoList(&numDevs);
+
+    if (ftStatus != FT_OK) {
+        std::cout << "Error obteniendo lista de dispositivos\n";
+        return 1;
+    }
+
+    std::cout << "Dispositivos FTDI encontrados: " << numDevs << "\n\n";
+
+    for (DWORD i = 0; i < numDevs; i++) {
+        DWORD flags, type, id, locId;
+        char serial[16];
+        char description[64];
+        FT_HANDLE tempHandle;
+
+        ftStatus = FT_GetDeviceInfoDetail(
+            i,
+            &flags,
+            &type,
+            &id,
+            &locId,
+            serial,
+            description,
+            &tempHandle);
+
+        if (ftStatus == FT_OK) {
+            std::cout << "Indice: " << i << '\n';
+            std::cout << "  Descripcion : " << description << '\n';
+            std::cout << "  Serie       : " << serial << '\n';
+            std::cout << "  LocID       : 0x" << std::hex << locId << std::dec << '\n';
+            std::cout << "  Tipo        : " << type << "\n\n";
+        }
+    }
+//--
+
+
+    
+    int dispositivo_i = -1;
+
+    std::cout << "Introduce el numero del dispositivo FTDI UM232H-B conectado: ";
+    std::cin >> dispositivo_i;
+    if (dispositivo_i < 0) {
+        std::cout << "Indice erroneo.\n";
+        return 1;
+    }
+    ftStatus = FT_Open(dispositivo_i, &ftHandle); 
 
     if (ftStatus != FT_OK) {
         std::cout << "Error FT_Open: " << ftStatus << "\n";
@@ -28,7 +75,7 @@ int main() {
     FT_SetLatencyTimer(ftHandle, 1);
     FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
 
-    std::cout << "Transmisor FTDI. Pulsa 'e' para enviar un numero, ESC para salir.\n";
+    std::cout << "Transmisor FTDI. Pulsa 'e' para enviar un numero, 'p' para purgar buffers, 'l' para leer, 'ESC' para salir.\n";
 
     // Bucle de transmision.
     while (true) {
@@ -76,6 +123,34 @@ int main() {
                           << std::setw(2) << std::setfill('0')
                           << static_cast<int>(data) << ")\n";
                 std::cout << std::dec;
+            }
+            else if (ch == 'p' || ch == 'P') {
+                DWORD rx = 0, tx = 0, events = 0;
+                FT_GetStatus(ftHandle, &rx, &tx, &events);
+
+                std::cout << "En el buffer rx habia: " << rx << " bytes, y en el buffer tx habia: " << tx << " bytes\n";
+
+                FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
+                std::cout << "Buffers purgados.\n";
+            }
+            else if (ch == 'l' || ch == 'L') {
+                std::cout << "Modo lectura. Pulsa ESC para salir.\n";
+
+                while (!_kbhit() || _getch() != 27) {
+                    DWORD disponibles = 0, leidos = 0;
+                    unsigned char dato;
+
+                    FT_GetQueueStatus(ftHandle, &disponibles);
+
+                    while (disponibles--) {
+                        FT_Read(ftHandle, &dato, 1, &leidos);
+
+                        if (leidos)
+                            std::cout << "RX: " << static_cast<int>(dato) << '\n';
+                    }
+
+                    Sleep(10);
+                }
             }
             else {
                 std::cout << "Tecla no asignada.\n";

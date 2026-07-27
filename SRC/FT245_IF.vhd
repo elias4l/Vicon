@@ -77,8 +77,8 @@ end FT245_IF;
 --EC34. Modelaremos la FSM para el control de escritura as ncrono en un interfaz tipo FT245.
 architecture Behavioral of FT245_IF is
     type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3,
-                        wait_for_RXE, read_wait_1, read_wait_2, read_data, read_data_stop,
-                        wait_for_RXE_UP, wait_RXE_1, wait_RXE_2, wait_RXE_3, wait_RXE_4, wait_RXE_5);
+                        wait_for_RXE, read_1, read_2, read_3, read_4, wait_for_RXE_UP);
+
     signal state_reg, state_next: state_type;
 --EC34. Trabajar con la versi n sincronizada de TXEn
     signal synchronizer_tx: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
@@ -132,72 +132,44 @@ begin
     modo_rx_next <= modo_rx_reg;
     case state_reg is
         when idle =>
-            modo_rx_next <= '0'; -- bus DATA capturado.
+            modo_rx_next <= '0'; -- bus DATA capturado, TX por defecto.
             ready_next <= '1';
             WRn_next <= '1';
             RDn_next <= '1';
             if (rd_en = '1') then 
-                state_next <= wait_for_RXE;
+                state_next <= wait_for_RXE; -- la lectura asincrona tiene prioridad.
             elsif (wr_en = '1') then 
                 state_next <= wait_for_TXE;
             end if;
+
     --TFM. Parte dedicada a la lectura asincrona.
         when wait_for_RXE =>
-            modo_rx_next <= '1'; -- bus DATA liberado, se va a leer un dato.
+            modo_rx_next <= '1'; -- bus DATA liberado (Z), se va a leer un dato.
             ready_next <= '0';
-            RDn_next <= '1';
-            WRn_next <= '1';    -- por si viene desde write_3.
             if (RXEn_sync = '0') then 
-                state_next <= read_wait_1;
+                state_next <= read_1;
             end if;
-        when read_wait_1 =>
-            ready_next <= '0';
-            RDn_next <= '0'; -- Ahora el FT245 comienza el proceso de mostrar el siguiente dato en el bus de datos.
-            state_next <= read_wait_2;
-        when read_wait_2 =>
-            ready_next <= '0';
+
+        when read_1 => -- hay que bajar RDn y esperar t3 = 14ns.
             RDn_next <= '0';
-            state_next <= read_data;
-        when read_data =>
-            ready_next <= '0';
-            RDn_next <= '0';
+            state_next <= read_2;
+
+        when read_2 =>
+            state_next <= read_3;
+
+        when read_3 =>
+            state_next <= read_4;
+
+        when read_4 => --tras pasar min t4 = 30ns desde que RDn = 0, se puede capturar el dato y subir RDn.
             entrada_next <= DATA;
-            state_next <= read_data_stop;
-        when read_data_stop =>
-            modo_rx_next <= '0'; -- bus DATA capturado.
-            ready_next <= '0';
             RDn_next <= '1';
             state_next <= wait_for_RXE_UP;
+
         when wait_for_RXE_UP =>
-            ready_next <= '0';
-            RDn_next <= '1';
             if (RXEn_sync = '1') then 
-                state_next <= wait_RXE_1;
-            end if;
-        when wait_RXE_1 =>
-            ready_next <= '0';
-            RDn_next <= '1';
-            state_next <= wait_RXE_2;
-        when wait_RXE_2 =>
-            ready_next <= '0';
-            RDn_next <= '1';
-            state_next <= wait_RXE_3;
-        when wait_RXE_3 =>
-            ready_next <= '0';
-            RDn_next <= '1';
-            state_next <= wait_RXE_4;
-        when wait_RXE_4 =>
-            ready_next <= '0';
-            RDn_next <= '1';
-            state_next <= wait_RXE_5;
-        when wait_RXE_5 =>
-            ready_next <= '0';
-            RDn_next <= '1';
-            if (rd_en = '0') then 
                 state_next <= idle;
-            elsif (rd_en = '1') then 
-                state_next <= wait_for_RXE;
             end if;
+            
     --TFM. Parte anterior, dedicada a la escritura asincrona.  
         when wait_for_TXE =>
             ready_next <= '0';
@@ -207,31 +179,19 @@ begin
             end if;
         
         when output_data =>
-            ready_next <= '0';
-            WRn_next <= '1';
             salida_next <= DIN;
             state_next <= write_1;
         
         when write_1 =>
-            ready_next <= '0';
             WRn_next <= '0';
             state_next <= write_2;
         
         when write_2 =>
-            ready_next <= '0';
-            WRn_next <= '0';
             state_next <= write_3;
         
         when write_3 =>
-            ready_next <= '0';
-            WRn_next <= '0';
-            if (rd_en = '1') then 
-                state_next <= wait_for_RXE;
-            elsif (wr_en = '1') then 
-                state_next <= wait_for_TXE;
-            else
-                state_next <= idle;
-            end if;
+            state_next <= idle;
+
     end case;
     end process COMB;
     
