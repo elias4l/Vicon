@@ -50,8 +50,7 @@ alias PWRSAVn  : STD_LOGIC is JC(7); --JC10, R18 , -o
 --señales usadas en FT245_IF, lado FPGA
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
 signal UserDataOut  : STD_LOGIC_VECTOR(7 downto 0);
-signal User_wr_en  : STD_LOGIC;
-signal User_rd_en  : STD_LOGIC;
+signal User_wrn_rd  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
 signal MRST   : STD_LOGIC := '0';
 
@@ -137,9 +136,8 @@ begin
     
     -- User IO ---------------------------
         DIN     => UserDataIn,     -- i[7:0]
-        wr_en   => User_wr_en,     -- i
+        wrn_rd   => User_wrn_rd,     -- i
         DOUT    => UserDataOut,    -- o[7:0] -- modo RX
-        rd_en   => User_rd_en,     -- i -- modo RX
         ready   => User_rdy_flag,  -- o
     
     -- FT245-like interface --------------
@@ -162,64 +160,9 @@ begin
     FT245_OEn <= '1';  -- no usados, solo para modo sincrono.
     PWRSAVn <= '1';  -- no usados 
 
-    --instancia de la FIFO
-    --B = anchura del Bus de direcciones.
-    --W = anchura de los buses de datos DIN y DOUT.
-    -- ===============================
-    --    INSTANCE TEMPLATE
-    -- ===============================
-    FIFO_inst : entity work.FIFO
-    port map (
-        CLK   => CLK,
-        RST   => MRST,
-
-        DIN   => FIFO_DIN,
-        PUSH  => FIFO_PUSH,
-        FULL  => FIFO_FULL,
-
-        DOUT  => FIFO_DOUT,
-        POP   => FIFO_POP,
-        EMPTY => FIFO_EMPTY
-    );
-
-    -- conexionado de la FIFO y del FT245_IF
-    FIFO_POP <= btnU_tick and User_rdy_flag and not FIFO_EMPTY;
-    User_wr_en <= FIFO_POP;
-
-    process(clk)
-    begin
-        if rising_edge(clk) then
-            if MRST = '1' then
-                UserDataIn <= (others => '0');
-            elsif FIFO_POP = '1' then
-                UserDataIn <= FIFO_DOUT;
-            end if;
-        end if;
-    end process;
-
-    -- conexionado de la FIFO y de los pulsadores btnD y btnU
-    FIFO_PUSH <= btnD_tick and not FIFO_FULL;
-
-
     -- conexionado BtnR y modo RX del FT245_IF
-    User_rd_en <= btnR_tick and User_rdy_flag;
+    User_wrn_rd <= btnR_db and User_rdy_flag;
     LED(7 downto 0) <= UserDataOut;
-
--- envio contador al FT245 lo mas rapido posible
---    process(clk)
---    begin
---        if rising_edge(clk) then
---            if User_rdy_flag = '1' then
---                User_wr_en <= '1';
---                cont_dato <= cont_dato + 1;
---            else
---                User_wr_en <= '0';
---            end if;
---        end if;
---    end process;
-
-    --FIFO_DIN <= cont_dato;
-    FIFO_DIN <= sw(7 downto 0);
 
     --indicadores
     seg <= SW(6 downto 0);
