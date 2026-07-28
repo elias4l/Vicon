@@ -118,7 +118,7 @@ begin
     CAM_SCL <= 'Z'; -- SCL
     --señales de entrada no usadas en JXAC
 -- TEST, en el Reset del MT9V111 meto un reloj de unos 5s porque es la unica forma de observar datos. Se detiene al segundo o dos.
-    JXADC(0) <= CAM_CLK_locked AND cam_div(25); -- JXAC1
+    JXADC(0) <= CAM_CLK_locked AND cam_div(28); -- JXAC1
     JXADC(4) <= '1'; -- JXAC7
 
     --crear tick con flanco de subida de CAM_PCLK
@@ -138,8 +138,21 @@ begin
             cam_div <= cam_div + 1;
         end if;
     end process;
-    LED(15) <= cam_div(22);
-    LED(14) <= CAM_CLK_locked; 
+    LED(15) <= cam_div(28);
+    LED(14) <= CAM_CLK_locked;
+    -- ver movimiento en los pines de la camara.
+    LED(0) <= CAM_XCLK;
+    LED(1) <= CAM_PCLK;
+    LED(2) <= CAM_HSYNC;
+    LED(3) <= CAM_VSYNC;
+    LED(4) <= CAM_D0;
+    LED(5) <= CAM_D1;
+    LED(6) <= CAM_D2;
+    LED(7) <= CAM_D3;
+    LED(8) <= CAM_D4;
+    LED(9) <= CAM_D5;
+    LED(10) <= CAM_D6;
+    LED(11) <= CAM_D7;
 
 -- envio contador al FT245 lo mas rapido posible
 --    process(clk)
