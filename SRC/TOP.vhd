@@ -125,7 +125,7 @@ signal rd_en_d : std_logic := '0';
 signal ready_d : std_logic := '0';
 signal lectura_pendiente : std_logic := '0';
 signal cam_read_enable : std_logic := '0';
-
+signal cont_dato  : unsigned(7 downto 0) := (others => '0');
 
 begin
 
@@ -134,7 +134,19 @@ begin
 -- CODIGO RELACIONADO CON EL SENSOR CMOS
 ------------------------------------------
 
-    CAM_Data <= JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
+    CAM_Data <= std_logic_vector(cont_dato);--JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
+    -- envio contador al FT245 lo mas rapido posible
+    process(CAM_XCLK)
+    begin
+        if rising_edge(CAM_XCLK) then
+            if MRST = '1' then
+                cont_dato <= (others => '0');
+            elsif CAM_HSYNC = '1' then
+                cont_dato <= cont_dato + 1;
+            end if;
+        end if;
+    end process;
+
 
     --senales de JA que son entradas.
     CAM_D6    <= 'Z'; -- JA(0)
