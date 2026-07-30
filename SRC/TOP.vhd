@@ -117,14 +117,15 @@ signal User_rd_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
 signal MRST   : STD_LOGIC := '0';
 
--- contador, borrar
-signal cont_freq  : unsigned(32 downto 0) := (others => '0');
-signal cont_dato  : unsigned(7 downto 0) := (others => '0');
+signal synchronizer_RXEn: STD_LOGIC_VECTOR (1 downto 0);
+signal FT245_RXEn_sync: STD_LOGIC;
 
---test borrar
-signal CAM_div_22  : STD_LOGIC;
-signal cam_div : unsigned(23 downto 0) := (others => '0'); --borrar, LED15
-signal test  : STD_LOGIC_VECTOR(7 downto 0);
+--temporal
+signal rd_en_d : std_logic := '0';
+signal ready_d : std_logic := '0';
+signal lectura_pendiente : std_logic := '0';
+signal cam_read_enable : std_logic := '0';
+
 
 begin
 
@@ -179,17 +180,6 @@ begin
         level => CAM_PCLK_sync,
         tick  => CAM_PCLK_sync_tick
     );
-
-    cam_read_en <= sw(0); --test
-    
-    --borrar, LED 15 muestra que el reloj 12MHz funciona.
-    process(CAM_CLK2)
-    begin
-        if rising_edge(CAM_CLK2) then
-            cam_div <= cam_div + 1;
-        end if;
-    end process;
-    --LED(15) <= cam_div(22);
     
 -- ===============================
 --    INSTANCE TEMPLATE
@@ -208,10 +198,48 @@ begin
         DOUT    => FIFO_DIN,     -- o[7:0]
         PUSH    => FIFO_PUSH      -- o
      );
-    
+
+    --tempora. enable de CAM_read se activa si se recibe un comando, por ejemplo x"07".
+    process(CLK)
+    begin
+        if rising_edge(CLK) then
+            if MRST = '1' then
+                rd_en_d <= '0';
+                ready_d <= '0';
+                lectura_pendiente <= '0';
+                cam_read_enable <= '0';
+            else
+                rd_en_d <= User_rd_en;
+                ready_d <= User_rdy_flag;
+                -- FIFO_PUSH deshabilita la captura
+                if FIFO_PUSH = '1' then
+                    cam_read_enable <= '0';
+                end if;
+                -- Flanco ascendente de rd_en, comenzo una lectura.
+                if rd_en_d = '0' and User_rd_en = '1' then
+                    lectura_pendiente <= '1';
+                end if;
+                -- Flanco ascendente de ready, lectura terminada y se puede analizar el comando recibido.
+                if ready_d = '0' and User_rdy_flag = '1' and lectura_pendiente = '1' then
+                    lectura_pendiente <= '0';
+                    if UserDataOut = x"07" then
+                        cam_read_enable <= '1';
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+cam_read_en <= cam_read_enable or SW(0);
+
 -- TEST borrar
-    --LED(15) <= cam_div(22);
-    LED(7 downto 0) <= FIFO_DIN; --CAM_Data_sync;
+    LED(7 downto 0) <= UserDataOut;
+    --LED(0) <= FT245_RXEn;
+    --LED(1) <= FT245_RXEn_sync;
+    --LED(2) <= User_rd_en;
+    --LED(3) <= FT245_RDn;
+    --LED(4) <= enable_tick;
+
+
     LED(8) <= CAM_CLK2; -- CAM_XCLK
     LED(9) <= CAM_PCLK;
     LED(10) <= CAM_HSYNC;
@@ -277,7 +305,7 @@ begin
         TXEn    => FT245_TXEn,     -- i
         WRn     => FT245_WRn,      -- o
         RDn     => FT245_RDn,       -- o -- modo RX
-        RXEn    => FT245_RXEn,     -- o -- modo RX
+        RXEn    => FT245_RXEn,     -- i -- modo RX
         DATA(0) => FT245_D(0),
         DATA(1) => FT245_D(4),
         DATA(2) => FT245_D(1),
@@ -292,13 +320,12 @@ begin
     UserDataIn <= FIFO_DOUT;
     User_wr_en <= FIFO_POP;
     FIFO_POP <= User_rdy_flag and not FIFO_EMPTY;
-
-
-
-    --test
-    User_rd_en <= '0'; -- rx inabilitada.
-    test <= SW(8 downto 1);
-
-    
+    -- si FT245_RXEn baja, se habilita rd_en para leer el byte disponible.
+    process begin
+        wait until rising_edge(clk);
+        synchronizer_RXEn <= FT245_RXEn & synchronizer_RXEn(1);
+    end process;
+    FT245_RXEn_sync <= synchronizer_RXEn(0);
+    User_rd_en <= not FT245_RXEn_sync;
 
 end Behavioral;

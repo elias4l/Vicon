@@ -81,8 +81,8 @@ architecture Behavioral of FT245_IF is
 
     signal state_reg, state_next: state_type;
 --EC34. Trabajar con la versi n sincronizada de TXEn
-    signal synchronizer_tx: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
-    signal synchronizer_rx: STD_LOGIC_VECTOR (2 downto 0); -- Modulo M24.
+    signal synchronizer_tx: STD_LOGIC_VECTOR (1 downto 0); -- Modulo M24.
+    signal synchronizer_rx: STD_LOGIC_VECTOR (1 downto 0); -- Modulo M24.
     signal TXEn_sync: STD_LOGIC;
     signal RXEn_sync: STD_LOGIC;
     
@@ -206,13 +206,13 @@ begin
 -- EC34. Modelaremos un simple sincronizador de 2 FF. Codigo copiado de M24.
     process begin
         wait until rising_edge(clk);
-        synchronizer_tx <= TXEn & synchronizer_tx(2 downto 1);
+        synchronizer_tx <= TXEn & synchronizer_tx(1);
     end process;
     TXEn_sync <= synchronizer_tx(0);
     
     process begin
         wait until rising_edge(clk);
-        synchronizer_rx <= RXEn & synchronizer_rx(2 downto 1);
+        synchronizer_rx <= RXEn & synchronizer_rx(1);
     end process;
     RXEn_sync <= synchronizer_rx(0);
 
