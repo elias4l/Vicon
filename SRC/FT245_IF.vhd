@@ -76,7 +76,7 @@ end FT245_IF;
 
 --EC34. Modelaremos la FSM para el control de escritura as ncrono en un interfaz tipo FT245.
 architecture Behavioral of FT245_IF is
-    type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3,
+    type state_type is (idle, wait_for_TXE, output_data, write_1, write_2, write_3, write_4,
                         wait_for_RXE, read_1, read_2, read_3, read_4, wait_for_RXE_UP);
 
     signal state_reg, state_next: state_type;
@@ -192,6 +192,9 @@ begin
             state_next <= write_3;
         
         when write_3 =>
+            state_next <= write_4;
+        
+        when write_4 =>
             state_next <= idle;
 
     end case;

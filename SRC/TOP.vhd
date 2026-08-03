@@ -29,7 +29,7 @@ entity TOP is
            JA : inout STD_LOGIC_VECTOR(7 downto 0);
            JB : inout STD_LOGIC_VECTOR(7 downto 0); -- DATA de FTDI_IF es io.
            JC : inout STD_LOGIC_VECTOR(7 downto 0);
-           JXADC : in STD_LOGIC_VECTOR(7 downto 0));
+           JXADC : inout STD_LOGIC_VECTOR(7 downto 0));
 
 end TOP;
 
@@ -49,11 +49,10 @@ alias CAM_D7: STD_LOGIC is JA(5);
 alias CAM_VSYNC: STD_LOGIC is JA(6);
 alias CAM_SCL: STD_LOGIC is JA(7);
 
-
 signal  CAM_PCLK_edge  : STD_LOGIC;
 
 --aliases puerto JXADC
-alias CAM_cable: STD_LOGIC is JXADC(0);
+alias CAM_cable: STD_LOGIC is JXADC(0); --reset del sensor CMOS
 alias CAM_D0: STD_LOGIC is JXADC(1);
 alias CAM_D2: STD_LOGIC is JXADC(2);
 alias CAM_D4: STD_LOGIC is JXADC(3);
@@ -125,7 +124,12 @@ signal rd_en_d : std_logic := '0';
 signal ready_d : std_logic := '0';
 signal lectura_pendiente : std_logic := '0';
 signal cam_read_enable : std_logic := '0';
-signal cont_dato  : unsigned(7 downto 0) := (others => '0');
+signal cont_dato : unsigned(7 downto 0) := (others => '0');
+
+signal cont_dato_push : unsigned(7 downto 0) := (others => '0');
+signal FIFO_PUSH_d : STD_LOGIC;
+signal cont_dato_pop : unsigned(7 downto 0) := (others => '0');
+signal User_wr_en_d : STD_LOGIC;
 
 begin
 
@@ -134,14 +138,16 @@ begin
 -- CODIGO RELACIONADO CON EL SENSOR CMOS
 ------------------------------------------
 
-    CAM_Data <= std_logic_vector(cont_dato);--JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
-    -- envio contador al FT245 lo mas rapido posible
-    process(CAM_XCLK)
+    CAM_Data <= JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
+    CAM_cable <= CAM_CLK_locked; -- reset del sensor CMOS, activo en alto.
+
+    -- borrar envio contador al FT245 lo mas rapido posible
+    process(CAM_PCLK_sync_tick)
     begin
-        if rising_edge(CAM_XCLK) then
+        if rising_edge(CAM_PCLK_sync_tick) then
             if MRST = '1' then
                 cont_dato <= (others => '0');
-            elsif CAM_HSYNC = '1' then
+            elsif CAM_HSYNC_sync = '1' then
                 cont_dato <= cont_dato + 1;
             end if;
         end if;
@@ -157,7 +163,14 @@ begin
     --senales no usadas en JA
     CAM_SDA <= '1'; -- JA(3)
     CAM_SCL <= '1'; -- JA(7)
-    
+    --senales de JXADC que son entradas.
+    CAM_D0 <= 'Z'; -- JXADC(1)
+    CAM_D1 <= 'Z'; -- JXADC(5)
+    CAM_D2 <= 'Z'; -- JXADC(2)
+    CAM_D3 <= 'Z'; -- JXADC(6)
+    CAM_D4 <= 'Z'; -- JXADC(3)
+    CAM_D5 <= 'Z'; -- JXADC(7)
+
     --reloj de 12Mhz para CAM_XCLK
     camMMCM: entity WORK.clk_wiz_0
     port map (
@@ -182,7 +195,7 @@ begin
     CAM_HSYNC_sync <= synchronizer_hsync(0);
     CAM_VSYNC_sync <= synchronizer_vsync(0);
     CAM_PCLK_sync  <= synchronizer_pclk(0);
-    CAM_Data_sync  <= synchronizer_data(7 downto 0);
+    CAM_Data_sync  <= std_logic_vector(cont_dato);--synchronizer_data(7 downto 0);
 
     -- crear senal que se activa un solo flanco de reloj al subir PCLK_sync.
     PCLK_EDGE: entity work.edge_detect
@@ -285,6 +298,26 @@ cam_read_en <= cam_read_enable or SW(0);
         EMPTY => FIFO_EMPTY  -- o
     );
 
+
+    -- borrar: contador que se metera en la fifo
+process(clk)
+begin
+    if rising_edge(clk) then
+        if MRST = '1' then
+            FIFO_PUSH_d  <= '0';
+            cont_dato_push <= (others => '0');
+        else
+            FIFO_PUSH_d <= FIFO_PUSH;
+            if FIFO_PUSH = '1' and FIFO_PUSH_d = '0' then
+                cont_dato_push <= cont_dato_push + 1;
+            end if;
+        end if;
+    end if;
+end process;
+
+
+
+
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL FTDI FT232H
 ------------------------------------------
@@ -328,10 +361,26 @@ cam_read_en <= cam_read_enable or SW(0);
         DATA(7) => FT245_D(7)
     );
 
+    -- borrar: contador que se metera en la fifo
+process(clk)
+begin
+    if rising_edge(clk) then
+        if MRST = '1' then
+            User_wr_en_d  <= '0';
+            cont_dato_pop <= (others => '0');
+        else
+            User_wr_en_d <= User_wr_en;
+            if User_wr_en = '1' and User_wr_en_d = '0' then
+                cont_dato_pop <= cont_dato_pop + 1;
+            end if;
+        end if;
+    end if;
+end process;
+
     -- conexionado de la FIFO y del FT245_IF
     UserDataIn <= FIFO_DOUT;
     User_wr_en <= FIFO_POP;
-    FIFO_POP <= User_rdy_flag and not FIFO_EMPTY;
+    FIFO_POP <= User_rdy_flag and not FIFO_EMPTY and not FIFO_PUSH;
     -- si FT245_RXEn baja, se habilita rd_en para leer el byte disponible.
     process begin
         wait until rising_edge(clk);

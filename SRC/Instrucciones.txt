@@ -1,5 +1,10 @@
-Resumen:
+Script tcl:
+File -> Project -> write tcl (desmarcar Copy sources to new project).
+Cerrar Vivado y borrar todo menos SRC y tfm.tcl.
+Luego para reconstruir el proyecto:
+cd C:/Users/elias/Desktop/mei_practicas/tfm/Vicon
+source tfm.tcl
 
-
-cd C:/Users/elias/Desktop/mei_practicas/tfm/V_0_0_1/SRC
-source sim.tcl
+Simulacion:
+cd C:/Users/elias/Desktop/mei_practicas/tfm/Vicon/SRC
+source TOP_frame.tcl
