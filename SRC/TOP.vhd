@@ -195,7 +195,8 @@ begin
     CAM_HSYNC_sync <= synchronizer_hsync(0);
     CAM_VSYNC_sync <= synchronizer_vsync(0);
     CAM_PCLK_sync  <= synchronizer_pclk(0);
-    CAM_Data_sync  <= std_logic_vector(cont_dato);--synchronizer_data(7 downto 0);
+    -- std_logic_vector(cont_dato);
+    CAM_Data_sync  <= synchronizer_data(7 downto 0);
 
     -- crear senal que se activa un solo flanco de reloj al subir PCLK_sync.
     PCLK_EDGE: entity work.edge_detect
