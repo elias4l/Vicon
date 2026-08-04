@@ -120,7 +120,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>PushButton</string>
+     <string>Recibir frame</string>
     </property>
    </widget>
   </widget>
