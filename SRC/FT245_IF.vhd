@@ -45,9 +45,9 @@ use IEEE.STD_LOGIC_1164.ALL;
     
     -- User IO ---------------------------
 --     DIN     => UserDataIn,     -- i[7:0]
---     wr_en   => User_wr_en,     -- i
+--     wrn_rd   => User_wrn_rd,     -- i
 --     DOUT    => UserDataOut,    -- o[7:0]
---     rd_en   => User_rd_en,     -- i
+--     enable   => User_en,     -- i
 --     ready   => User_rdy_flag,  -- o
     
     -- FT245-like interface --------------
@@ -63,9 +63,9 @@ entity FT245_IF is
     Port ( clk : in STD_LOGIC;
            reset : in STD_LOGIC;
            DIN : in STD_LOGIC_VECTOR (7 downto 0);
-           wr_en : in STD_LOGIC;
+           wrn_rd : in STD_LOGIC;
            DOUT : out STD_LOGIC_VECTOR (7 downto 0);
-           rd_en : in STD_LOGIC;
+           enable : in STD_LOGIC;
            ready : out STD_LOGIC;
            TXEn : in STD_LOGIC;
            WRn : out STD_LOGIC;
@@ -120,7 +120,7 @@ begin
         
     
 --  otro proceso para modelar la lógica de estado siguiente. 
-    COMB: process (state_reg, DIN, rd_en, wr_en, TXEn_sync, RXEn_sync, DATA, entrada_reg, salida_reg, ready_reg, WRn_reg, RDn_reg, modo_rx_reg) 
+    COMB: process (state_reg, DIN, wrn_rd, enable, TXEn_sync, RXEn_sync, DATA, entrada_reg, salida_reg, ready_reg, WRn_reg, RDn_reg, modo_rx_reg) 
     begin
     --EC34. Asignación por defecto: simplifica el código y evita LATCHES no deseados.
     state_next <= state_reg;
@@ -136,10 +136,10 @@ begin
             ready_next <= '1';
             WRn_next <= '1';
             RDn_next <= '1';
-            if (rd_en = '1') then 
+            if (wrn_rd = '1') and (enable = '1') then -- modo RX.
                 ready_next <= '0';
                 state_next <= wait_for_RXE; -- la lectura asincrona tiene prioridad.
-            elsif (wr_en = '1') then
+            elsif (wrn_rd = '0') and (enable = '1') then -- modo TX.
                 ready_next <= '0';
                 state_next <= wait_for_TXE;
             end if;
@@ -147,7 +147,6 @@ begin
     --TFM. Parte dedicada a la lectura asincrona.
         when wait_for_RXE =>
             modo_rx_next <= '1'; -- bus DATA liberado (Z), se va a leer un dato.
-            ready_next <= '0';
             if (RXEn_sync = '0') then 
                 state_next <= read_1;
             end if;

@@ -111,25 +111,22 @@ alias PWRSAVn  : STD_LOGIC is JC(7); --JC10, R18 , -o
 --señales usadas en FT245_IF, lado FPGA
 signal UserDataIn  : STD_LOGIC_VECTOR(7 downto 0);
 signal UserDataOut  : STD_LOGIC_VECTOR(7 downto 0);
-signal User_wr_en  : STD_LOGIC;
-signal User_rd_en  : STD_LOGIC;
+signal User_wrn_rd  : STD_LOGIC;
+signal User_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
 signal MRST   : STD_LOGIC := '0';
 
 signal synchronizer_RXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_RXEn_sync: STD_LOGIC;
+signal synchronizer_TXEn: STD_LOGIC_VECTOR (1 downto 0);
+signal FT245_TXEn_sync: STD_LOGIC;
+signal FT245_WR_tick: STD_LOGIC;
 
 --temporal
-signal rd_en_d : std_logic := '0';
-signal ready_d : std_logic := '0';
-signal lectura_pendiente : std_logic := '0';
-signal cam_read_enable : std_logic := '0';
-signal cont_dato : unsigned(7 downto 0) := (others => '0');
+signal User_rdy_flag_d           : std_logic := '1';
+signal User_wrn_rd_d      : std_logic := '0';
+signal CAM_read_enable_leido : std_logic := '0';
 
-signal cont_dato_push : unsigned(7 downto 0) := (others => '0');
-signal FIFO_PUSH_d : STD_LOGIC;
-signal cont_dato_pop : unsigned(7 downto 0) := (others => '0');
-signal User_wr_en_d : STD_LOGIC;
 
 begin
 
@@ -140,19 +137,6 @@ begin
 
     CAM_Data <= JA(5) & JA(0) & JXADC(7) & JXADC(3) & JXADC(6) & JXADC(2) & JXADC(5) & JXADC(1);
     CAM_cable <= CAM_CLK_locked; -- reset del sensor CMOS, activo en alto.
-
-    -- borrar envio contador al FT245 lo mas rapido posible
-    process(CAM_PCLK_sync_tick)
-    begin
-        if rising_edge(CAM_PCLK_sync_tick) then
-            if MRST = '1' then
-                cont_dato <= (others => '0');
-            elsif CAM_HSYNC_sync = '1' then
-                cont_dato <= cont_dato + 1;
-            end if;
-        end if;
-    end process;
-
 
     --senales de JA que son entradas.
     CAM_D6    <= 'Z'; -- JA(0)
@@ -225,46 +209,45 @@ begin
         PUSH    => FIFO_PUSH      -- o
      );
 
-    --tempora. enable de CAM_read se activa si se recibe un comando, por ejemplo x"07".
-    process(CLK)
+    -- CAM_read enable se activa si se recibe lee un dato con el BIT0 en alto.
+    -- Para habilitar enable, 
+    process(CLK, MRST)
     begin
-        if rising_edge(CLK) then
-            if MRST = '1' then
-                rd_en_d <= '0';
-                ready_d <= '0';
-                lectura_pendiente <= '0';
-                cam_read_enable <= '0';
-            else
-                rd_en_d <= User_rd_en;
-                ready_d <= User_rdy_flag;
-                -- FIFO_PUSH deshabilita la captura
-                if FIFO_PUSH = '1' then
-                    cam_read_enable <= '0';
-                end if;
-                -- Flanco ascendente de rd_en, comenzo una lectura.
-                if rd_en_d = '0' and User_rd_en = '1' then
-                    lectura_pendiente <= '1';
-                end if;
-                -- Flanco ascendente de ready, lectura terminada y se puede analizar el comando recibido.
-                if ready_d = '0' and User_rdy_flag = '1' and lectura_pendiente = '1' then
-                    lectura_pendiente <= '0';
-                    if UserDataOut = x"07" then
-                        cam_read_enable <= '1';
+        if MRST = '1' then
+            User_rdy_flag_d <= '1';
+            User_wrn_rd_d <= '0';
+            CAM_read_enable_leido <= '0';
+        elsif rising_edge(CLK) then
+            User_rdy_flag_d <= User_rdy_flag;
+            -- Deshabilitar enable una vez comienza un nuevo frame (CAM_PCLK_sync_tick = '1').
+            if (CAM_read_enable_leido = '1') and (CAM_PCLK_sync_tick = '1') then
+                CAM_read_enable_leido <= '0';
+            end if;
+            -- En flanco de bajada de User_rdy_flag en FTDI_IF, capturar el estado de User_wrn_rd (alto si FTDI indica que hay un byte disponible para leer).
+            -- Puesto que FTDI_IF da prioridad a la lectura, esto indica que cuando User_rdy_flag suba de nuevo, se habra leido el byte del dispositivo FTDI.
+            if (User_rdy_flag_d = '1') and (User_rdy_flag = '0') then
+                User_wrn_rd_d <= User_wrn_rd;
+            end if;
+            -- En flanco de subida de User_rdy_flag en FTDI_IF, con User_wrn_rd_d activado, UserDataOut contiene el byte leido del dispositivo FTDI.
+            if (User_rdy_flag_d = '0') and (User_rdy_flag = '1') then
+                if User_wrn_rd_d = '1' then
+                    if UserDataOut(0) = '1' then --BIT0 = 1, leer proximo frame de la camara (CAM_read_enable_leido = '1').
+                        CAM_read_enable_leido <= '1';
                     end if;
                 end if;
+                User_wrn_rd_d <= '0';
             end if;
         end if;
     end process;
-cam_read_en <= cam_read_enable or SW(0);
+    cam_read_en <= CAM_read_enable_leido or SW(0);
 
 -- TEST borrar
     LED(7 downto 0) <= UserDataOut;
     --LED(0) <= FT245_RXEn;
     --LED(1) <= FT245_RXEn_sync;
-    --LED(2) <= User_rd_en;
+    --LED(2) <= User_en;
     --LED(3) <= FT245_RDn;
     --LED(4) <= enable_tick;
-
 
     LED(8) <= CAM_CLK2; -- CAM_XCLK
     LED(9) <= CAM_PCLK;
@@ -274,7 +257,7 @@ cam_read_en <= cam_read_enable or SW(0);
     LED(12) <= FIFO_PUSH;
     LED(13) <= FIFO_FULL;
     LED(14) <= FIFO_EMPTY;
-    LED(15) <= User_wr_en;
+    LED(15) <= User_wrn_rd;
     
 ------------------------------------------
 -- CODIGO RELACIONADO CON LA FIFO BRAM
@@ -299,25 +282,14 @@ cam_read_en <= cam_read_enable or SW(0);
         EMPTY => FIFO_EMPTY  -- o
     );
 
-
-    -- borrar: contador que se metera en la fifo
-process(clk)
-begin
-    if rising_edge(clk) then
-        if MRST = '1' then
-            FIFO_PUSH_d  <= '0';
-            cont_dato_push <= (others => '0');
-        else
-            FIFO_PUSH_d <= FIFO_PUSH;
-            if FIFO_PUSH = '1' and FIFO_PUSH_d = '0' then
-                cont_dato_push <= cont_dato_push + 1;
-            end if;
-        end if;
-    end if;
-end process;
-
-
-
+    FIFO_POP <= FT245_WR_tick; -- Se activa un solo flanco de reloj al bajar FT245_WRn, que ocurre cuando FTDI_IF ya ha leido el dato de la FIFO.
+    FT245_WR_EDGE: entity work.edge_detect
+    port map (
+        clk   => clk,
+        reset => MRST,
+        level => not FT245_WRn,
+        tick  => FT245_WR_tick
+    );
 
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL FTDI FT232H
@@ -341,17 +313,17 @@ end process;
         reset   => MRST, -- i
     
     -- User IO ---------------------------
-        DIN     => UserDataIn,     -- i[7:0]
-        wr_en   => User_wr_en,     -- i
-        DOUT    => UserDataOut,    -- o[7:0] -- modo RX
-        rd_en   => User_rd_en,     -- i -- modo RX
-        ready   => User_rdy_flag,  -- o
+        DIN     => UserDataIn, -- i[7:0]
+        wrn_rd   => User_wrn_rd, -- i
+        DOUT    => UserDataOut, -- o[7:0] -- modo RX
+        enable   => User_en, -- i
+        ready   => User_rdy_flag, -- o
     
     -- FT245-like interface --------------
-        TXEn    => FT245_TXEn,     -- i
-        WRn     => FT245_WRn,      -- o
-        RDn     => FT245_RDn,       -- o -- modo RX
-        RXEn    => FT245_RXEn,     -- i -- modo RX
+        TXEn    => FT245_TXEn, -- i, internmaente sincronizada.
+        WRn     => FT245_WRn, -- o, modo TX.
+        RDn     => FT245_RDn, -- o, modo RX.
+        RXEn    => FT245_RXEn, -- i, internamente sincronizada.
         DATA(0) => FT245_D(0),
         DATA(1) => FT245_D(4),
         DATA(2) => FT245_D(1),
@@ -362,32 +334,19 @@ end process;
         DATA(7) => FT245_D(7)
     );
 
-    -- borrar: contador que se metera en la fifo
-process(clk)
-begin
-    if rising_edge(clk) then
-        if MRST = '1' then
-            User_wr_en_d  <= '0';
-            cont_dato_pop <= (others => '0');
-        else
-            User_wr_en_d <= User_wr_en;
-            if User_wr_en = '1' and User_wr_en_d = '0' then
-                cont_dato_pop <= cont_dato_pop + 1;
-            end if;
-        end if;
-    end if;
-end process;
-
     -- conexionado de la FIFO y del FT245_IF
     UserDataIn <= FIFO_DOUT;
-    User_wr_en <= FIFO_POP;
-    FIFO_POP <= User_rdy_flag and not FIFO_EMPTY and not FIFO_PUSH;
-    -- si FT245_RXEn baja, se habilita rd_en para leer el byte disponible.
+    User_wrn_rd <= not FT245_RXEn; -- RX tiene prioridad sobre TX. Si FTDI baja RXEn, se inicia la lectura de un byte de DATA.
+    User_en <=User_rdy_flag and (not FT245_RXEn_sync or (not FT245_TXEn_sync and not FIFO_EMPTY));
+
+    -- conexionado de la FT245_IF con JB y JC.
+    -- sincronizacion de senales de entrada TXEn y RXEn.
     process begin
         wait until rising_edge(clk);
         synchronizer_RXEn <= FT245_RXEn & synchronizer_RXEn(1);
+        synchronizer_TXEn <= FT245_TXEn & synchronizer_TXEn(1);
     end process;
     FT245_RXEn_sync <= synchronizer_RXEn(0);
-    User_rd_en <= not FT245_RXEn_sync;
+    FT245_TXEn_sync <= synchronizer_TXEn(0);
 
 end Behavioral;

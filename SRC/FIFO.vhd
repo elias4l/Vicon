@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------
--- FIFO BRAM.
+-- FIFO BRAM. PUSH y POP se pueden activar a la vez.
 ----------------------------------------------------------------------------------
 
 
@@ -68,17 +68,20 @@ begin
             if (RST = '1') then --EC32. ambos contadores deben ponerse a 0, de manera SÍNCRONA, cuando se activa la entrada RST.
                 wr_ptr <= (others => '0');
                 rd_ptr <= (others => '0');
-            elsif wr_en = '1' and PUSH = '1' then --EC32. el puntero de escritura se incrementa solo cuando se activa la habilitación de escritura.
-                if wr_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then -- tamaño del bus de direcciones es B.
-                    wr_ptr <= (others => '0');  -- memoria RAM circular.
-                else
-                    wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
+            else --TFM. Ahora PUSH y POP pueden estar activadas a la vez.
+                if wr_en = '1' and PUSH = '1' then --EC32. el puntero de escritura se incrementa solo cuando se activa la habilitación de escritura.
+                    if wr_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then -- tamaño del bus de direcciones es B.
+                        wr_ptr <= (others => '0');  -- memoria RAM circular.
+                    else
+                        wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
+                    end if;
                 end if;
-            elsif rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
-                if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then
-                    rd_ptr <= (others => '0');
-                else
-                    rd_ptr <= std_logic_vector(unsigned(rd_ptr) + 1);
+                if rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
+                    if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then
+                        rd_ptr <= (others => '0');
+                    else
+                        rd_ptr <= std_logic_vector(unsigned(rd_ptr) + 1);
+                    end if;
                 end if;
             end if;
         end if;

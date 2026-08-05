@@ -6,10 +6,13 @@
 #include <QImage>
 #include <QPixmap>
 
+
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     ui.setupUi(this);
+    comando = 0;
 
 //===============================================
 //  CONECTAR DISPOSITIVO FTDI
@@ -130,8 +133,8 @@ void MainWindow::recibirFrame()
         return;
     }
 
-    // La FPGA utiliza el comando 7 para solicitar el envio de un unico frame.
-    unsigned char comando = 7;
+    // La FPGA comprueba el BIT0 para decidir si debe escribir un frame.
+    comando |= CMD_LEER_FRAME;
     DWORD bytesEscritos = 0;
 
     ftStatus = FT_Write(ftHandle, &comando, 1, &bytesEscritos);
@@ -218,11 +221,12 @@ QImage MainWindow::convertirFrame(const std::vector<unsigned char>& frame)
         for (int x = 0; x < ancho; x += 2)  // Procesar de dos en dos al estar la informacion de ambos pixeles compartida.
         {
             int posicion = (y * ancho + x) * 2; // Indice en el vector de bytes del frame.
-            //Pixel 0: y0 + u + v. Pixel 1: y1 + u + v,
-            int y0 = frame[posicion]; // Luminosidad del pixel 0.
-            int v = frame[posicion + 1]; // Cr de ambos pixeles.
-            int y1 = frame[posicion + 2]; // Luminosidad del pixel 1.
-            int u = frame[posicion + 3]; // Cb de ambos pixeles.
+            // ITU_R BT.656: Cb (Chroma U), Y0 (Luma), Cr (Chroma V), Y1.
+            // Pixel 0: y0 + u + v. Pixel 1: y1 + u + v.
+            int u = frame[posicion]; // Cb de ambos pixeles.
+            int y0 = frame[posicion + 1]; // Luminosidad del pixel 0.
+            int v = frame[posicion + 2]; // Cr de ambos pixeles.
+            int y1 = frame[posicion + 3]; // Luminosidad del pixel 1.
 
             int c0 = y0 - 16; // MT9V111 Developer Guide, CCIR 601/656 con Y limitado de 16 (negro) a 235 (blanco).
             int c1 = y1 - 16;

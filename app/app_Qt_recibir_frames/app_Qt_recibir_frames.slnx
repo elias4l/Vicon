@@ -2,5 +2,5 @@
   <Configurations>
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="app_Qt_recibir_frames.vcxproj" />
+  <Project Path="app_Qt_recibir_frames.vcxproj" Id="1f37c9c8-b588-4910-9503-4dc27a0a101b" />
 </Solution>
