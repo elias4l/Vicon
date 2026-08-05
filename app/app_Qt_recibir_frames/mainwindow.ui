@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>566</height>
+    <width>853</width>
+    <height>604</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -81,22 +81,25 @@
    <widget class="QLabel" name="labelFpsTexto">
     <property name="geometry">
      <rect>
-      <x>680</x>
+      <x>690</x>
       <y>50</y>
-      <width>21</width>
+      <width>31</width>
       <height>21</height>
      </rect>
     </property>
     <property name="text">
      <string>FPS:</string>
     </property>
+    <property name="alignment">
+     <set>Qt::AlignmentFlag::AlignCenter</set>
+    </property>
    </widget>
    <widget class="QLabel" name="labelFps">
     <property name="geometry">
      <rect>
-      <x>710</x>
+      <x>730</x>
       <y>50</y>
-      <width>61</width>
+      <width>71</width>
       <height>21</height>
      </rect>
     </property>
@@ -113,14 +116,14 @@
     </property>
     <property name="geometry">
      <rect>
-      <x>680</x>
-      <y>100</y>
-      <width>80</width>
-      <height>18</height>
+      <x>690</x>
+      <y>90</y>
+      <width>111</width>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
-     <string>PushButton</string>
+     <string/>
     </property>
    </widget>
   </widget>
@@ -129,7 +132,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>853</width>
      <height>17</height>
     </rect>
    </property>

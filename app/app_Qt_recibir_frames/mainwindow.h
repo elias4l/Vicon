@@ -4,6 +4,8 @@
 #include "ui_mainwindow.h"
 #include "ftd2xx.h" // Libreria del controlador FTDI FT232H.
 #include <QImage> // Para trabajar con imagenes.
+#include <QTimer>
+#include <QElapsedTimer> // Para clacular fps.
 #include <vector>
 
 class MainWindow : public QMainWindow
@@ -28,5 +30,10 @@ private:
     void recibirFrame();
     QImage convertirFrame(const std::vector<unsigned char>& frame);
     int limitarColor(int valor);
+    // Variables para recibir video y calcular los FPS.
+    QTimer temporizadorVideo; // Indica cuando solicitar el siguiente frame.
+    QElapsedTimer temporizadorFps;
+    bool videoActivo = false;
+    int framesRecibidos = 0;
 };
 

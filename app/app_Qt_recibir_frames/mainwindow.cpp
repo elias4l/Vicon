@@ -1,8 +1,6 @@
 #include "mainwindow.h"
 #include <QMessageBox>
 #include <QString>
-#include <vector>
-#include <QElapsedTimer>
 #include <QImage>
 #include <QPixmap>
 
@@ -13,6 +11,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui.setupUi(this);
     comando = 0;
+    temporizadorVideo.setSingleShot(true); // El temporizador usado para pedir un frame, no se rearma automaticamente sino al terminar de recibir un frame.
+
+    connect(&temporizadorVideo, &QTimer::timeout, this, &MainWindow::recibirFrame);  // Cuando el temporizador se agota, se llama a la funcion de solicitar un nuevo frame.
 
 //===============================================
 //  CONECTAR DISPOSITIVO FTDI
@@ -94,24 +95,46 @@ MainWindow::MainWindow(QWidget *parent)
                 ui.labelVideo->setText("FTDI conectado");
 
                 ui.buttonVideo->setEnabled(true);
+                ui.buttonVideo->setText("Iniciar video");
             }
             else   // Dispositivo conectado, desconectar.
             {
+                videoActivo = false;
+                temporizadorVideo.stop();
+                ui.buttonVideo->setText("Iniciar video");
+                ui.buttonVideo->setEnabled(false);
+
                 FT_Close(ftHandle);
                 ftHandle = nullptr;
 
+                ui.labelVideo->setText("Sin señal");
                 ui.buttonConectar->setText("Conectar");
                 ui.comboDispositivos->setEnabled(true);
-                ui.labelVideo->setText("Sin señal");
                 ui.labelFps->setText("0.0");
 
-                ui.buttonVideo->setEnabled(false);
             }
         });
 
-    // Boton de visualizar video.
-    connect(ui.buttonVideo, &QPushButton::clicked, this, &MainWindow::recibirFrame);
-
+// BOTON VISUALIZAR VIDEO.
+//===============================================
+    connect(ui.buttonVideo, &QPushButton::clicked, this, [this]()
+    {
+        if (videoActivo) // Detener el video.
+        {
+            videoActivo = false;
+            temporizadorVideo.stop();
+            ui.buttonVideo->setText("Iniciar video");
+            ui.labelFps->setText("0.0");
+        }
+        else // Iniciar el video.
+        {
+            videoActivo = true;
+            framesRecibidos = 0;
+            temporizadorFps.start();
+            ui.buttonVideo->setText("Detener video");
+            temporizadorVideo.start(0); // Solicitar el primer frame.
+        }
+    });
 }
 
 
@@ -125,10 +148,12 @@ void MainWindow::recibirFrame()
     const DWORD frameBytes = 640 * 480 * 2;
 
     // Eliminamos si hubiera por error bytes antiguos antes de pedir el nuevo frame.
-    ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
+    //ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
 
     if (ftStatus != FT_OK)
     {
+        videoActivo = false;
+        ui.buttonVideo->setText("Iniciar video");
         QMessageBox::critical(this, "Error FT_Purge.", "Error al limpiar los buffers.");
         return;
     }
@@ -141,6 +166,8 @@ void MainWindow::recibirFrame()
 
     if (ftStatus != FT_OK || bytesEscritos != 1)
     {
+        videoActivo = false;
+        ui.buttonVideo->setText("Iniciar video");
         QMessageBox::critical(this, "Error FT_Write.", "Error al solicitar el frame.");
         return;
     }
@@ -165,6 +192,8 @@ void MainWindow::recibirFrame()
 
         if (ftStatus != FT_OK)
         {
+            videoActivo = false;
+            ui.buttonVideo->setText("Iniciar video");
             QMessageBox::critical(this, "Error FT_Read.", "Error al llamar a FT_Read.");
             return;
         }
@@ -174,6 +203,8 @@ void MainWindow::recibirFrame()
         // Evita quedarse esperando de forma indefinida si la FPGA no responde. Max 1s.
         if (tiempo.elapsed() > 1000)
         {
+            videoActivo = false;
+            ui.buttonVideo->setText("Iniciar video");
             QMessageBox::critical(this, "Error lectura de frame.", "Tiempo superior a 1 segundo.");
             return;
         }
@@ -183,6 +214,8 @@ void MainWindow::recibirFrame()
 
     if (imagen.isNull())
     {
+        videoActivo = false;
+        ui.buttonVideo->setText("Iniciar video");
         QMessageBox::critical(this, "Error de imagen.", "No se pudo convertir el frame a RGB.");
         return;
     }
@@ -190,6 +223,22 @@ void MainWindow::recibirFrame()
     // setPixmap requiere una imagen de tipo QPixmap. La ajusta a labelVideo manteniendo el ratio.
     QPixmap imagenEscalada = QPixmap::fromImage(imagen).scaled(ui.labelVideo->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
     ui.labelVideo->setPixmap(imagenEscalada);
+
+    // Calcular FPS.
+    framesRecibidos++;
+    if (temporizadorFps.elapsed() >= 1000) // Actualizar valor cada segundo.
+    {
+        double fps = framesRecibidos * 1000.0 / temporizadorFps.elapsed();
+        ui.labelFps -> setText(QString::number(fps, 'f', 1));
+        framesRecibidos = 0;
+        temporizadorFps.restart();
+    }
+
+    // Solicitar nuevo frame.
+    if (videoActivo)
+    {
+        temporizadorVideo.start(0);
+    }
 }
 
 // Valores RGB nunca debe salir del rango 0-255.
