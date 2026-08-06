@@ -123,9 +123,10 @@ signal FT245_TXEn_sync: STD_LOGIC;
 signal FT245_WR_tick: STD_LOGIC;
 
 --temporal
-signal User_rdy_flag_d           : std_logic := '1';
-signal User_wrn_rd_d      : std_logic := '0';
+signal User_rdy_flag_d : std_logic := '1';
+signal User_wrn_rd_d : std_logic := '0';
 signal CAM_read_enable_leido : std_logic := '0';
+signal CAM_read_color : std_logic := '0';
 
 
 begin
@@ -200,6 +201,7 @@ begin
         reset   => MRST, -- i
         pclk_tick   => CAM_PCLK_sync_tick, -- i
         enable   => cam_read_en, -- i
+        color   => CAM_read_color, -- i
     -- Camera IO ---------------------------
         DIN     => CAM_Data_sync,     -- i[7:0]
         VSYNC   => CAM_VSYNC_sync,     -- i
@@ -217,6 +219,7 @@ begin
             User_rdy_flag_d <= '1';
             User_wrn_rd_d <= '0';
             CAM_read_enable_leido <= '0';
+            CAM_read_color <= '0';
         elsif rising_edge(CLK) then
             User_rdy_flag_d <= User_rdy_flag;
             -- Deshabilitar enable una vez comienza un nuevo frame (CAM_PCLK_sync_tick = '1').
@@ -231,9 +234,8 @@ begin
             -- En flanco de subida de User_rdy_flag en FTDI_IF, con User_wrn_rd_d activado, UserDataOut contiene el byte leido del dispositivo FTDI.
             if (User_rdy_flag_d = '0') and (User_rdy_flag = '1') then
                 if User_wrn_rd_d = '1' then
-                    if UserDataOut(0) = '1' then --BIT0 = 1, leer proximo frame de la camara (CAM_read_enable_leido = '1').
-                        CAM_read_enable_leido <= '1';
-                    end if;
+                    CAM_read_enable_leido <= UserDataOut(0); --BIT0 = 1, leer proximo frame de la camara (CAM_read_enable_leido = '1').
+                    CAM_read_color <= UserDataOut(1); --BIT1 = 1, leer proximo frame de la camara a color.
                 end if;
                 User_wrn_rd_d <= '0';
             end if;

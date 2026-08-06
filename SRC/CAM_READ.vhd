@@ -28,6 +28,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 --     reset   => RST, -- i
 --     pclk_tick   => PCLK_tick, -- i
 --     enable   => EN, -- i
+--     color   => CAM_read_color, -- i
     
     -- Camera IO ---------------------------
 --     DIN     => CAM_DATA,     -- i[7:0]
@@ -45,6 +46,7 @@ entity cam_read is
            reset : in STD_LOGIC;
            pclk_tick : in STD_LOGIC;
            enable : in STD_LOGIC;
+           color : in STD_LOGIC;
            DIN : in STD_LOGIC_VECTOR (7 downto 0);
            VSYNC : in STD_LOGIC;
            HSYNC : in STD_LOGIC;
@@ -54,7 +56,7 @@ end cam_read;
 
 --TFM. Modelaremos la FSM para enviar bytes utiles a la FIFO.
 architecture Behavioral of cam_read is
-    type state_type is (idle, wait_frame_end, wait_frame_start, wait_line_start, push_byte);
+    type state_type is (idle, wait_frame_end, wait_frame_start, wait_line_start, push_byte, skip_byte);
     signal state_reg, state_next: state_type;
     signal salida_next, salida_reg: STD_LOGIC_VECTOR (7 downto 0); -- para cada salida, crearemos dos senales internas.
     signal push_next, push_reg: STD_LOGIC;
@@ -80,7 +82,7 @@ begin
         
     
 --  otro proceso para modelar la logica de estado siguiente. 
-    COMB: process (state_reg, enable, VSYNC, HSYNC, DIN, salida_reg)    
+    COMB: process (state_reg, enable, color, VSYNC, HSYNC, DIN, salida_reg)    
     begin
     --EC34. Asignacion por defecto: simplifica el codigo y evita LATCHES no deseados.
     state_next <= state_reg;
@@ -106,9 +108,13 @@ begin
             if (VSYNC = '0') then -- Fin de frame. VSYNC baja 6 ciclos PCLK despues de bajar HSYNC en la ultima linea.
                 state_next <= idle;
             elsif (HSYNC = '1') then -- Primer byte válido de la linea nueva.
-                salida_next <= DIN;
-                push_next <= '1';
                 state_next <= push_byte;
+                if (color = '1') then -- Primer byte es Chroma. Solo se envia a la FIFO si color = 1.
+                    salida_next <= DIN;
+                    push_next <= '1';
+                else
+                    push_next <= '0';
+                end if;
             end if;
         
         when push_byte => -- VSYNC = 1 y HSYNC = 1.
@@ -117,7 +123,21 @@ begin
             else
                 salida_next <= DIN;
                 push_next <= '1';
+                if (color = '1') then
+                    state_next <= push_byte;
+                else
+                    state_next <= skip_byte;
+                end if;
             end if;
+        
+        when skip_byte => -- VSYNC = 1 y HSYNC = 1.
+            if (HSYNC = '0') then -- Fin de linea. VSYNC sigue a 1.
+                state_next <= wait_line_start;
+            else
+                push_next <= '0';
+                state_next <= push_byte;
+            end if;
+            
     end case;
     end process COMB;
     

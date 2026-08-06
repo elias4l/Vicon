@@ -10,10 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     ui.setupUi(this);
-    comando = 0;
-    temporizadorVideo.setSingleShot(true); // El temporizador usado para pedir un frame, no se rearma automaticamente sino al terminar de recibir un frame.
 
-    connect(&temporizadorVideo, &QTimer::timeout, this, &MainWindow::recibirFrame);  // Cuando el temporizador se agota, se llama a la funcion de solicitar un nuevo frame.
 
 //===============================================
 //  CONECTAR DISPOSITIVO FTDI
@@ -94,8 +91,9 @@ MainWindow::MainWindow(QWidget *parent)
                 ui.comboDispositivos->setEnabled(false);
                 ui.labelVideo->setText("FTDI conectado");
 
-                ui.buttonVideo->setEnabled(true);
                 ui.buttonVideo->setText("Iniciar video");
+                ui.buttonVideo->setEnabled(true);
+                ui.checkBoxVideoColor->setEnabled(true);
             }
             else   // Dispositivo conectado, desconectar.
             {
@@ -103,6 +101,7 @@ MainWindow::MainWindow(QWidget *parent)
                 temporizadorVideo.stop();
                 ui.buttonVideo->setText("Iniciar video");
                 ui.buttonVideo->setEnabled(false);
+                ui.checkBoxVideoColor->setEnabled(false);
 
                 FT_Close(ftHandle);
                 ftHandle = nullptr;
@@ -135,6 +134,21 @@ MainWindow::MainWindow(QWidget *parent)
             temporizadorVideo.start(0); // Solicitar el primer frame.
         }
     });
+
+// CHECKBOX VISUALIZAR VIDEO A COLOR.
+//===============================================
+    ui.checkBoxVideoColor->setChecked(videoColor);
+    ui.checkBoxVideoColor->setEnabled(false);
+
+    connect(ui.checkBoxVideoColor, &QCheckBox::toggled, this, [this](bool checked)
+        {
+            videoColor = checked;
+        });
+
+// TEMPORIZADOR ENCARGADO DE SOLICITAR FRAMES.
+//===============================================
+    temporizadorVideo.setSingleShot(true); // El temporizador usado para pedir un frame, no se rearma automaticamente sino al terminar de recibir un frame.
+    connect(&temporizadorVideo, &QTimer::timeout, this, &MainWindow::recibirFrame);  // Cuando el temporizador se agota, se llama a la funcion de solicitar un nuevo frame.
 }
 
 
@@ -142,13 +156,13 @@ MainWindow::MainWindow(QWidget *parent)
 //  MOSTRAR VIDEO
 //===============================================
 
-// Solicita un framet al dispositivo FTDI, lee los 614400 bytes en formato YCbCr, lo transforma a RGB y lo muestra en el panel de video.
+// Solicita un frame al dispositivo FTDI, lee los 614400 bytes en formato YCbCr, lo transforma a RGB y lo muestra en el panel de video.
 void MainWindow::recibirFrame()
 {
-    const DWORD frameBytes = 640 * 480 * 2;
+    const DWORD frameBytes = videoColor ? 640u * 480u * 2u : 640u * 480u;
 
     // Eliminamos si hubiera por error bytes antiguos antes de pedir el nuevo frame.
-    //ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
+    ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
 
     if (ftStatus != FT_OK)
     {
@@ -159,7 +173,12 @@ void MainWindow::recibirFrame()
     }
 
     // La FPGA comprueba el BIT0 para decidir si debe escribir un frame.
-    comando |= CMD_LEER_FRAME;
+    comando = CMD_LEER_FRAME;
+    // La FPGA comprueba el BIT1 para decidir si el frame es a color.
+    if (videoColor)
+    {
+        comando |= CMD_COLOR;
+    }
     DWORD bytesEscritos = 0;
 
     ftStatus = FT_Write(ftHandle, &comando, 1, &bytesEscritos);
@@ -210,7 +229,17 @@ void MainWindow::recibirFrame()
         }
     }
 
-    QImage imagen = convertirFrame(frame);
+    QImage imagen;
+
+    if (videoColor)
+    {
+        imagen = convertirFrameColor(frame);
+    }
+    else
+    {
+        imagen = convertirFrameBN(frame);
+    }
+    
 
     if (imagen.isNull())
     {
@@ -256,7 +285,7 @@ int MainWindow::limitarColor(int valor)
 }
 
 // Convierte datos de video YCbCr 4:2:2 en píxeles RGB, formato que QImage necesita para mostrar colores.
-QImage MainWindow::convertirFrame(const std::vector<unsigned char>& frame)
+QImage MainWindow::convertirFrameColor(const std::vector<unsigned char>& frame)
 {
     const int ancho = 640;  // VGA.
     const int alto = 480;
@@ -300,6 +329,31 @@ QImage MainWindow::convertirFrame(const std::vector<unsigned char>& frame)
             linea[(x + 1) * 3] = rojo1;
             linea[(x + 1) * 3 + 1] = verde1;
             linea[(x + 1) * 3 + 2] = azul1;
+        }
+    }
+
+    return imagen;
+}
+
+// Convierte datos de video Y en píxeles RGB, formato que QImage necesita para mostrar colores.
+QImage MainWindow::convertirFrameBN(const std::vector<unsigned char>& frame)
+{
+    const int ancho = 640;  // VGA.
+    const int alto = 480;
+
+    QImage imagen(ancho, alto, QImage::Format_RGB888);
+
+    for (int y = 0; y < alto; y++)  // Cada linea ..
+    {
+        unsigned char* linea = imagen.scanLine(y);
+
+        for (int x = 0; x < ancho; x ++)  // Cada byte es el valor luma Y del pixel.
+        {
+            int posicion = (y * ancho + x); // Indice en el vector de bytes del frame.
+            // Posiciones RGB del pixel, todos equivalen al valor luma.
+            linea[x * 3] = frame[posicion];
+            linea[x * 3 + 1] = frame[posicion];
+            linea[x * 3 + 2] = frame[posicion];
         }
     }
 
