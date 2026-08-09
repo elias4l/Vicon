@@ -148,86 +148,7 @@ signal synchronizer_TXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_TXEn_sync: STD_LOGIC;
 
 
--- borrar
-signal push_count     : unsigned(19 downto 0) := (others => '0');
-signal push_count_ok  : std_logic := '0';
-signal vsync_previous : std_logic := '0';
-
-
-signal pop_count : unsigned(19 downto 0) := (others => '0');
-
 begin
---borrar
-process(CLK, MRST)
-    variable count_next : unsigned(19 downto 0);
-begin
-    if MRST = '1' then
-        push_count     <= (others => '0');
-        push_count_ok  <= '0';
-        vsync_previous <= '0';
-
-    elsif rising_edge(CLK) then
-        count_next := push_count;
-
-        -- Detectar los flancos de VSYNC
-        if CAM_PCLK_sync_tick = '1' then
-            vsync_previous <= CAM_VSYNC;
-
-            -- Comienzo del frame
-            if vsync_previous = '0' and CAM_VSYNC = '1' then
-                count_next := (others => '0');
-            end if;
-        end if;
-
-        -- Contar los pulsos PUSH
-        if FIFO_PUSH = '1' then
-            count_next := count_next + 1;
-        end if;
-
-        -- Final del frame
-        if CAM_PCLK_sync_tick = '1' and
-           vsync_previous = '1' and CAM_VSYNC = '0' then
-
-            if CAM_read_color = '0' then
-                if count_next = to_unsigned(307200, count_next'length) then
-                    push_count_ok <= '1';
-                end if;
-            else
-                if count_next = to_unsigned(614400, count_next'length) then
-                    push_count_ok <= '1';
-                end if;
-            end if;
-        end if;
-
-        push_count <= count_next;
-    end if;
-end process;
-
-LED(12) <= push_count_ok;
-
-process(CLK, MRST)
-begin
-    if MRST = '1' then
-        pop_count <= (others => '0');
-
-    elsif rising_edge(CLK) then
-        if FIFO_POP = '1' then
-            pop_count <= pop_count + 1;
-        end if;
-    end if;
-end process;
-        LED(13) <= '1'
-    when (CAM_read_color = '0' and
-          (pop_count = to_unsigned(307200, pop_count'length)))
-      or (CAM_read_color = '1' and
-          (pop_count = to_unsigned(614400, pop_count'length)))
-    else '0';
-
-LED(15) <= '1'
-    when pop_count > to_unsigned(307200, pop_count'length)
-    else '0';
-
-    MRST <= btnC;
 
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL MODULO CTRL
@@ -367,10 +288,10 @@ LED(15) <= '1'
     LED(10) <= CAM_HSYNC;
     LED(11) <= CAM_VSYNC;
 
-    --LED(12) <= FIFO_PUSH;
-    --LED(13) <= FIFO_FULL;
+    LED(12) <= FIFO_PUSH;
+    LED(13) <= FIFO_FULL;
     LED(14) <= FIFO_EMPTY;
-    --LED(15) <= FIFO_FULL;
+    LED(15) <= FIFO_FULL;
     
 ------------------------------------------
 -- CODIGO RELACIONADO CON LA FIFO BRAM

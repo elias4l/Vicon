@@ -169,9 +169,13 @@ begin
 
     --TFM. TX del comando.
         when TX_enable =>
-            FTDI_IF_en_next <= '1';
             FTDI_IF_wrn_rd_next <= '0';
-            if (FTDI_IF_ready = '0') then 
+            FTDI_IF_en_next <= '1';
+
+            if FIFO_EMPTY = '1' then
+                FTDI_IF_en_next <= '0';  -- cancela la petición inmediatamente, evitando lectura de FIFO vacía.
+                state_next      <= idle;
+            elsif FTDI_IF_ready = '0' then
                 state_next <= TX_wait;
             end if;
 
@@ -184,7 +188,7 @@ begin
         when TX_fifo_pop => -- al entrar se tiene que FIFO_POP_reg = '1', por lo que primero siempre durante minimo un ciclo activa la salida FIFO_POP.
             if (FIFO_POP_reg = '1') and (FIFO_PUSH = '0') then
                 FIFO_POP_next <= '0';
-                state_next <= idle;
+                state_next <= TX_enable; -- si hay mas bytes en la FIFO.
             else
                 FIFO_POP_next <= '1';
             end if;
