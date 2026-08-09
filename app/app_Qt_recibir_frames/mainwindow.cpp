@@ -220,7 +220,7 @@ void MainWindow::recibirFrame()
         bytesLeidosTotales += bytesLeidos;
 
         // Evita quedarse esperando de forma indefinida si la FPGA no responde. Max 1s.
-        if (tiempo.elapsed() > 1000)
+        if (tiempo.elapsed() > 10000)
         {
             videoActivo = false;
             ui.buttonVideo->setText("Iniciar video");

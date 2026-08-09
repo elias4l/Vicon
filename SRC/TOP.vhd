@@ -5,7 +5,7 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL; --contador
+use IEEE.NUMERIC_STD.ALL; --contador, borrar
 
 -- Uncomment the following library declaration if using
 -- arithmetic functions with Signed or Unsigned values
@@ -36,6 +36,28 @@ end TOP;
 architecture Behavioral of TOP is
 
 ------------------------------------------
+-- SENALES RELACIONADAS CON EL MODULO CTRL
+------------------------------------------
+--senales del odulo de control
+signal CtrlCAM_read_reset : std_logic;
+signal CtrlCAM_read_en : std_logic;
+signal CtrlCAM_read_color : std_logic;
+signal CtrlCAM_pclk_tick : std_logic;
+
+signal CtrlFIFO_reset : std_logic;
+signal CtrlFIFO_PUSH : std_logic;
+signal CtrlFIFO_POP : std_logic;
+signal CtrlFIFO_EMPTY : std_logic;
+
+signal CtrlFTDI_IF_en : std_logic;
+signal CtrlFTDI_IF_ready : std_logic;
+signal CtrlFTDI_IF_wrn_rd : std_logic;
+signal CtrlFTDI_IF_DOUT : std_logic_vector(7 downto 0);
+signal CtrlFTDI_IF_RXEn : std_logic;
+signal CtrlFTDI_IF_TXEn : std_logic;
+
+
+------------------------------------------
 -- SENALES RELACIONADAS CON EL SENSOR CMOS
 ------------------------------------------
 
@@ -60,6 +82,8 @@ alias CAM_D1: STD_LOGIC is JXADC(5);
 alias CAM_D3: STD_LOGIC is JXADC(6);
 alias CAM_D5: STD_LOGIC is JXADC(7);
 
+signal CAM_Data : STD_LOGIC_VECTOR(7 downto 0);
+
 
 -- señales provenientes del sensor. Sincronizadas.
 signal synchronizer_hsync : std_logic_vector(1 downto 0);
@@ -74,8 +98,9 @@ signal CAM_Data_sync  : STD_LOGIC_VECTOR(7 downto 0);
 signal CAM_PCLK_sync_tick  : STD_LOGIC;
 
 -- señales usadas por el interfaz cam_read.
-signal cam_read_en : std_logic;
-signal CAM_Data : STD_LOGIC_VECTOR(7 downto 0);
+signal CAM_read_reset : std_logic;
+signal CAM_read_en : std_logic;
+signal CAM_read_color : std_logic;
 
 --señales usadas en camMMCM
 signal CAM_CLK1  : STD_LOGIC;
@@ -86,6 +111,7 @@ signal CAM_CLK_locked  : STD_LOGIC;
 -- SENALES RELACIONADAS CON LA BRAM FIFO
 ------------------------------------------
 --señales usadas en la FIFO
+signal FIFO_reset : STD_LOGIC;
 signal FIFO_DIN : STD_LOGIC_VECTOR(7 downto 0);
 signal FIFO_PUSH : STD_LOGIC;
 signal FIFO_FULL : STD_LOGIC;
@@ -120,18 +146,130 @@ signal synchronizer_RXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_RXEn_sync: STD_LOGIC;
 signal synchronizer_TXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_TXEn_sync: STD_LOGIC;
-signal FT245_WR_tick: STD_LOGIC;
 
---temporal
-signal User_rdy_flag_d : std_logic := '1';
-signal User_wrn_rd_d : std_logic := '0';
-signal CAM_read_enable_leido : std_logic := '0';
-signal CAM_read_color : std_logic := '0';
 
+-- borrar
+signal push_count     : unsigned(19 downto 0) := (others => '0');
+signal push_count_ok  : std_logic := '0';
+signal vsync_previous : std_logic := '0';
+
+
+signal pop_count : unsigned(19 downto 0) := (others => '0');
 
 begin
+--borrar
+process(CLK, MRST)
+    variable count_next : unsigned(19 downto 0);
+begin
+    if MRST = '1' then
+        push_count     <= (others => '0');
+        push_count_ok  <= '0';
+        vsync_previous <= '0';
+
+    elsif rising_edge(CLK) then
+        count_next := push_count;
+
+        -- Detectar los flancos de VSYNC
+        if CAM_PCLK_sync_tick = '1' then
+            vsync_previous <= CAM_VSYNC;
+
+            -- Comienzo del frame
+            if vsync_previous = '0' and CAM_VSYNC = '1' then
+                count_next := (others => '0');
+            end if;
+        end if;
+
+        -- Contar los pulsos PUSH
+        if FIFO_PUSH = '1' then
+            count_next := count_next + 1;
+        end if;
+
+        -- Final del frame
+        if CAM_PCLK_sync_tick = '1' and
+           vsync_previous = '1' and CAM_VSYNC = '0' then
+
+            if CAM_read_color = '0' then
+                if count_next = to_unsigned(307200, count_next'length) then
+                    push_count_ok <= '1';
+                end if;
+            else
+                if count_next = to_unsigned(614400, count_next'length) then
+                    push_count_ok <= '1';
+                end if;
+            end if;
+        end if;
+
+        push_count <= count_next;
+    end if;
+end process;
+
+LED(12) <= push_count_ok;
+
+process(CLK, MRST)
+begin
+    if MRST = '1' then
+        pop_count <= (others => '0');
+
+    elsif rising_edge(CLK) then
+        if FIFO_POP = '1' then
+            pop_count <= pop_count + 1;
+        end if;
+    end if;
+end process;
+        LED(13) <= '1'
+    when (CAM_read_color = '0' and
+          (pop_count = to_unsigned(307200, pop_count'length)))
+      or (CAM_read_color = '1' and
+          (pop_count = to_unsigned(614400, pop_count'length)))
+    else '0';
+
+LED(15) <= '1'
+    when pop_count > to_unsigned(307200, pop_count'length)
+    else '0';
 
     MRST <= btnC;
+
+------------------------------------------
+-- CODIGO RELACIONADO CON EL MODULO CTRL
+------------------------------------------
+
+    CTRL_inst: entity work.CONTROL
+    port map (
+        clk     => CLK, -- i
+        reset   => MRST, -- i
+        
+    -- CAM_read --------------------------
+        CAM_read_reset => CtrlCAM_read_reset,-- o
+        CAM_read_en => CtrlCAM_read_en,-- o
+        CAM_read_color => CtrlCAM_read_color,-- o
+        CAM_pclk_tick => CtrlCAM_pclk_tick,-- i
+        
+    -- FIFO interface -------------------
+        FIFO_reset => CtrlFIFO_reset, -- o
+        FIFO_PUSH => CtrlFIFO_PUSH, -- i
+        FIFO_POP => CtrlFIFO_POP, -- o
+        FIFO_EMPTY => CtrlFIFO_EMPTY, -- i
+        
+    -- FTDI_IF interface ----------------
+        FTDI_IF_en => CtrlFTDI_IF_en, -- o
+        FTDI_IF_ready => CtrlFTDI_IF_ready, -- i
+        FTDI_IF_wrn_rd => CtrlFTDI_IF_wrn_rd, -- o
+        FTDI_IF_DOUT => CtrlFTDI_IF_DOUT, -- i(7:0)
+        FTDI_IF_RXEn => CtrlFTDI_IF_RXEn, -- i
+        FTDI_IF_TXEn => CtrlFTDI_IF_TXEn -- i
+    );
+
+    CtrlCAM_pclk_tick <= CAM_PCLK_sync_tick;
+
+    CtrlFIFO_PUSH <= FIFO_PUSH;
+    CtrlFIFO_EMPTY <= FIFO_EMPTY;
+
+    CtrlFTDI_IF_ready <= User_rdy_flag;
+    CtrlFTDI_IF_DOUT <= UserDataOut;
+    CtrlFTDI_IF_RXEn <= FT245_RXEn_sync;
+    CtrlFTDI_IF_TXEn <= FT245_TXEn_sync;
+    
+
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL SENSOR CMOS
 ------------------------------------------
@@ -198,9 +336,9 @@ begin
     cam_read_inst: entity work.cam_read
     port map (
         clk     => CLK, -- i
-        reset   => MRST, -- i
+        reset   => CAM_read_reset, -- i
         pclk_tick   => CAM_PCLK_sync_tick, -- i
-        enable   => cam_read_en, -- i
+        enable   => CAM_read_en, -- i
         color   => CAM_read_color, -- i
     -- Camera IO ---------------------------
         DIN     => CAM_Data_sync,     -- i[7:0]
@@ -211,37 +349,10 @@ begin
         PUSH    => FIFO_PUSH      -- o
      );
 
-    -- CAM_read enable se activa si se recibe lee un dato con el BIT0 en alto.
-    -- Para habilitar enable, 
-    process(CLK, MRST)
-    begin
-        if MRST = '1' then
-            User_rdy_flag_d <= '1';
-            User_wrn_rd_d <= '0';
-            CAM_read_enable_leido <= '0';
-            CAM_read_color <= '0';
-        elsif rising_edge(CLK) then
-            User_rdy_flag_d <= User_rdy_flag;
-            -- Deshabilitar enable una vez comienza un nuevo frame (CAM_PCLK_sync_tick = '1').
-            if (CAM_read_enable_leido = '1') and (CAM_PCLK_sync_tick = '1') then
-                CAM_read_enable_leido <= '0';
-            end if;
-            -- En flanco de bajada de User_rdy_flag en FTDI_IF, capturar el estado de User_wrn_rd (alto si FTDI indica que hay un byte disponible para leer).
-            -- Puesto que FTDI_IF da prioridad a la lectura, esto indica que cuando User_rdy_flag suba de nuevo, se habra leido el byte del dispositivo FTDI.
-            if (User_rdy_flag_d = '1') and (User_rdy_flag = '0') then
-                User_wrn_rd_d <= User_wrn_rd;
-            end if;
-            -- En flanco de subida de User_rdy_flag en FTDI_IF, con User_wrn_rd_d activado, UserDataOut contiene el byte leido del dispositivo FTDI.
-            if (User_rdy_flag_d = '0') and (User_rdy_flag = '1') then
-                if User_wrn_rd_d = '1' then
-                    CAM_read_enable_leido <= UserDataOut(0); --BIT0 = 1, leer proximo frame de la camara (CAM_read_enable_leido = '1').
-                    CAM_read_color <= UserDataOut(1); --BIT1 = 1, leer proximo frame de la camara a color.
-                end if;
-                User_wrn_rd_d <= '0';
-            end if;
-        end if;
-    end process;
-    cam_read_en <= CAM_read_enable_leido or SW(0);
+    CAM_read_reset <= CtrlCAM_read_reset or MRST;
+    CAM_read_en <= CtrlCAM_read_en or SW(0);
+    CAM_read_color <= CtrlCAM_read_color;
+
 
 -- TEST borrar
     LED(7 downto 0) <= UserDataOut;
@@ -256,10 +367,10 @@ begin
     LED(10) <= CAM_HSYNC;
     LED(11) <= CAM_VSYNC;
 
-    LED(12) <= FIFO_PUSH;
-    LED(13) <= FIFO_FULL;
+    --LED(12) <= FIFO_PUSH;
+    --LED(13) <= FIFO_FULL;
     LED(14) <= FIFO_EMPTY;
-    LED(15) <= User_wrn_rd;
+    --LED(15) <= FIFO_FULL;
     
 ------------------------------------------
 -- CODIGO RELACIONADO CON LA FIFO BRAM
@@ -272,8 +383,8 @@ begin
 -- ===============================
     FIFO_inst : entity work.FIFO
     port map (
-        CLK   => CLK,        -- i
-        RST   => MRST,       -- i
+        CLK   => CLK, -- i
+        RST   => FIFO_reset, -- i
     -- FIFO input interface ----------------
         DIN   => FIFO_DIN,   -- i[7:0]
         PUSH  => FIFO_PUSH,  -- i
@@ -284,14 +395,8 @@ begin
         EMPTY => FIFO_EMPTY  -- o
     );
 
-    FIFO_POP <= FT245_WR_tick; -- Se activa un solo flanco de reloj al bajar FT245_WRn, que ocurre cuando FTDI_IF ya ha leido el dato de la FIFO.
-    FT245_WR_EDGE: entity work.edge_detect
-    port map (
-        clk   => clk,
-        reset => MRST,
-        level => not FT245_WRn,
-        tick  => FT245_WR_tick
-    );
+    FIFO_reset <= CtrlFIFO_reset or MRST;
+    FIFO_POP <= CtrlFIFO_POP;
 
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL FTDI FT232H
@@ -336,12 +441,12 @@ begin
         DATA(7) => FT245_D(7)
     );
 
-    -- conexionado de la FIFO y del FT245_IF
+    -- conexionado del modulo de control y el FT245_IF
+    User_wrn_rd <= CtrlFTDI_IF_wrn_rd;
+    User_en <= CtrlFTDI_IF_en;
+    -- conexionado de la FIFO y el FT245_IF
     UserDataIn <= FIFO_DOUT;
-    User_wrn_rd <= not FT245_RXEn; -- RX tiene prioridad sobre TX. Si FTDI baja RXEn, se inicia la lectura de un byte de DATA.
-    User_en <=User_rdy_flag and (not FT245_RXEn_sync or (not FT245_TXEn_sync and not FIFO_EMPTY));
-
-    -- conexionado de la FT245_IF con JB y JC.
+    -- conexionado del FT245_IF con JB y JC.
     -- sincronizacion de senales de entrada TXEn y RXEn.
     process begin
         wait until rising_edge(clk);

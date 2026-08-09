@@ -38,7 +38,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 -- ===============================
 --    INSTANCE TEMPLATE
 -- ===============================
--- FT245_inst: entity FT245_IF
+-- FT245_inst: entity work.FT245_IF
 -- port map (
 --     clk     => MCLK, -- i
 --     reset   => MRST, -- i
@@ -188,7 +188,7 @@ begin
             state_next <= write_2;
         
         when write_2 =>
-            state_next <= write_3;
+            state_next <= write_4;
         
         when write_3 =>
             state_next <= write_4;

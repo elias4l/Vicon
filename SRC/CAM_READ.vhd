@@ -22,7 +22,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 -- ===============================
 --    INSTANCE TEMPLATE
 -- ===============================
--- cam_read_inst: entity cam_read
+-- cam_read_inst: entity work.cam_read
 -- port map (
 --     clk     => CLK, -- i
 --     reset   => RST, -- i
@@ -108,35 +108,35 @@ begin
             if (VSYNC = '0') then -- Fin de frame. VSYNC baja 6 ciclos PCLK despues de bajar HSYNC en la ultima linea.
                 state_next <= idle;
             elsif (HSYNC = '1') then -- Primer byte válido de la linea nueva.
-                state_next <= push_byte;
                 if (color = '1') then -- Primer byte es Chroma. Solo se envia a la FIFO si color = 1.
                     salida_next <= DIN;
                     push_next <= '1';
+                    state_next <= push_byte;
                 else
                     push_next <= '0';
+                    state_next <= skip_byte;
                 end if;
             end if;
         
         when push_byte => -- VSYNC = 1 y HSYNC = 1.
             if (HSYNC = '0') then -- Fin de linea. VSYNC sigue a 1.
+                push_next <= '0';
                 state_next <= wait_line_start;
             else
-                salida_next <= DIN;
-                push_next <= '1';
                 if (color = '1') then
+                    salida_next <= DIN;
+                    push_next <= '1';
                     state_next <= push_byte;
                 else
+                    push_next <= '0';
                     state_next <= skip_byte;
                 end if;
             end if;
         
         when skip_byte => -- VSYNC = 1 y HSYNC = 1.
-            if (HSYNC = '0') then -- Fin de linea. VSYNC sigue a 1.
-                state_next <= wait_line_start;
-            else
-                push_next <= '0';
-                state_next <= push_byte;
-            end if;
+            salida_next <= DIN;
+            push_next   <= '1';
+            state_next  <= push_byte;
             
     end case;
     end process COMB;
