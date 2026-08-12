@@ -52,38 +52,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui.buttonConectar, &QPushButton::clicked, this, [this]()
         {
-            if (ftHandle == nullptr) // Dispositivo desconectado, conectar.
+            if (fuenteVideo.estaConectado() == false) // Dispositivo desconectado, conectar.
             {
                 int dispositivo_i = ui.comboDispositivos->currentData().toInt(); // Usar el seleccionado en el ComboBox.
-                ftStatus = FT_Open(dispositivo_i, &ftHandle);
-
-                if (ftStatus != FT_OK)
+                if (fuenteVideo.conectar(dispositivo_i) == false)
                 {
-                    ftHandle = nullptr;
-                    QMessageBox::critical(this, "Error al abrir el dispositivo FTDI.", "Error FT_Open: " + QString::number(ftStatus));
-                    return;
-                }
-
-                // Configuracion al conectarse al dispositivo: 
-                ftStatus = FT_SetTimeouts(ftHandle, 100, 100); // Tiempo (ms) maximo de espera para lectura y escritura.
-                if (ftStatus == FT_OK)
-                {
-                    ftStatus = FT_SetUSBParameters(ftHandle, 65536, 65536); // Tamano maximo del buffer en el PC asociado al controlador D2XX.
-                }
-                if (ftStatus == FT_OK)
-                {
-                    ftStatus = FT_SetLatencyTimer(ftHandle, 4); // Para video mejor usar latencia minima tras recibir datos. Max 255.
-                }
-                if (ftStatus == FT_OK)
-                {
-                    ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
-                }
-
-                if (ftStatus != FT_OK)
-                {
-                    FT_Close(ftHandle);
-                    ftHandle = nullptr;
-                    QMessageBox::critical(this, "Error al configurar el dispositivo FTDI.", "Error: " + QString::number(ftStatus));
+                    QMessageBox::critical(this, "Error FTDI.", "No se pudo abrir o configurar el dispositivo FTDI.");
                     return;
                 }
 
@@ -99,12 +73,11 @@ MainWindow::MainWindow(QWidget *parent)
             {
                 videoActivo = false;
                 temporizadorVideo.stop();
-                ui.buttonVideo->setText("Iniciar video");
+                ui.buttonVideo->setText("Detener video");
                 ui.buttonVideo->setEnabled(false);
                 ui.checkBoxVideoColor->setEnabled(false);
 
-                FT_Close(ftHandle);
-                ftHandle = nullptr;
+                fuenteVideo.desconectar();
 
                 ui.labelVideo->setText("Sin señal");
                 ui.buttonConectar->setText("Conectar");
@@ -122,7 +95,12 @@ MainWindow::MainWindow(QWidget *parent)
         {
             videoActivo = false;
             temporizadorVideo.stop();
-            ui.buttonVideo->setText("Iniciar video");
+            fuenteVideo.detenerRecepcion(); // Detener el bucle de recepcion y cerrar el hilo.
+
+            ui.labelVideo->clear(); // Eliminar frame y mostrar texto de video detenido.
+            ui.labelVideo->setText("Video detenido");
+            ui.buttonVideo->setText("Iniciar video"); // Resto de botones
+            ui.checkBoxVideoColor->setEnabled(true);
             ui.labelFps->setText("0.0");
         }
         else // Iniciar el video.
@@ -130,8 +108,10 @@ MainWindow::MainWindow(QWidget *parent)
             videoActivo = true;
             framesRecibidos = 0;
             temporizadorFps.start();
+            fuenteVideo.iniciarRecepcion(videoColor);
             ui.buttonVideo->setText("Detener video");
-            temporizadorVideo.start(0); // Solicitar el primer frame.
+            ui.checkBoxVideoColor->setEnabled(false);
+            temporizadorVideo.start(10); // Solicitar el primer frame. Qt comprueba cada 10 ms si hay un frame nuevo disponible.
         }
     });
 
@@ -159,76 +139,23 @@ MainWindow::MainWindow(QWidget *parent)
 // Solicita un frame al dispositivo FTDI, lee los 614400 bytes en formato YCbCr, lo transforma a RGB y lo muestra en el panel de video.
 void MainWindow::recibirFrame()
 {
-    const DWORD frameBytes = videoColor ? 640u * 480u * 2u : 640u * 480u;
-
-    // Eliminamos si hubiera por error bytes antiguos antes de pedir el nuevo frame.
-    ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX);
-
-    if (ftStatus != FT_OK)
+    std::vector<unsigned char> frame; // Vector de bytes del frame recibido.
+    if (!fuenteVideo.obtenerUltimoFrame(frame)) // Copia el ultimo frame recibido en el vector frame.
     {
-        videoActivo = false;
-        ui.buttonVideo->setText("Iniciar video");
-        QMessageBox::critical(this, "Error FT_Purge.", "Error al limpiar los buffers.");
-        return;
-    }
-
-    // La FPGA comprueba el BIT0 para decidir si debe escribir un frame.
-    comando = CMD_LEER_FRAME;
-    // La FPGA comprueba el BIT1 para decidir si el frame es a color.
-    if (videoColor)
-    {
-        comando |= CMD_COLOR;
-    }
-    DWORD bytesEscritos = 0;
-
-    ftStatus = FT_Write(ftHandle, &comando, 1, &bytesEscritos);
-
-    if (ftStatus != FT_OK || bytesEscritos != 1)
-    {
-        videoActivo = false;
-        ui.buttonVideo->setText("Iniciar video");
-        QMessageBox::critical(this, "Error FT_Write.", "Error al solicitar el frame.");
-        return;
-    }
-
-    std::vector<unsigned char> frame(frameBytes);
-
-    DWORD bytesLeidosTotales = 0;
-    QElapsedTimer tiempo; // Timeout de lectura del frame.
-    tiempo.start();
-
-    while (bytesLeidosTotales < frameBytes)
-    {
-        DWORD bytesLeidos = 0; // En cada llamada a FT_Read().
-        DWORD bytesPorLeer = frameBytes - bytesLeidosTotales;
-        // Tamano maximo del buffer.
-        if (bytesPorLeer > 65536)
-        {
-            bytesPorLeer = 65536;
-        }
-
-        ftStatus = FT_Read(ftHandle, &frame[bytesLeidosTotales], bytesPorLeer, &bytesLeidos);
-
-        if (ftStatus != FT_OK)
+        if(!fuenteVideo.estaRecibiendo()) // Si el hilo de recepcion se detuvo por algun error, detener el video.
         {
             videoActivo = false;
+            fuenteVideo.detenerRecepcion(); // Detener el bucle de recepcion y cerrar el hilo.
             ui.buttonVideo->setText("Iniciar video");
-            QMessageBox::critical(this, "Error FT_Read.", "Error al llamar a FT_Read.");
-            return;
+            ui.checkBoxVideoColor->setEnabled(true);
+            ui.labelFps->setText("0.0");
+            QMessageBox::critical(this, "Error de recepcion.", "El hilo FTDI ha dejado de recibir frames");
+            return; // No hay frame nuevo disponible, salir de la funcion.
         }
-
-        bytesLeidosTotales += bytesLeidos;
-
-        // Evita quedarse esperando de forma indefinida si la FPGA no responde. Max 1s.
-        if (tiempo.elapsed() > 10000)
-        {
-            videoActivo = false;
-            ui.buttonVideo->setText("Iniciar video");
-            QMessageBox::critical(this, "Error lectura de frame.", "Tiempo superior a 1 segundo.");
-            return;
-        }
+        temporizadorVideo.start(10); // El hilo sigue activo, pero no hay frame nuevo disponible, volver a comprobar en 10 ms.
+        return;
     }
-
+    
     QImage imagen;
 
     if (videoColor)
@@ -266,7 +193,7 @@ void MainWindow::recibirFrame()
     // Solicitar nuevo frame.
     if (videoActivo)
     {
-        temporizadorVideo.start(0);
+        temporizadorVideo.start(10); // Compueba cada 10 ms si hay un frame nuevo disponible.
     }
 }
 
