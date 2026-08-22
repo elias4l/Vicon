@@ -1,0 +1,31 @@
+Como incluir los distintos archivos al proyecto de Visual Studio Insiders.
+#include "ftd2xx.h":
+cabeceras opencv:
+
+C/C++ → General → Additional Include Directories
+$(ProjectDir)include
+C:\opencv-4.14.0\opencv\build\include
+
+ftd2xx.lib:
+opencv lib:
+
+Linker → General → Additional Library Directories
+$(ProjectDir)include
+C:\opencv-4.14.0\opencv\build\x64\vc16\lib
+
+
+Linker → Input → Additional Dependencies
+ftd2xx.lib
+opencv_world4140d.lib
+opencv_world4140.lib
+
+
+C:\opencv-4.14.0\opencv\build\x64\vc16\bin\opencv_world4140d.dll
+en carpeta_del_proyecto\x64\Debug
+C:\opencv-4.14.0\opencv\build\x64\vc16\bin\opencv_world4140.dll
+en carpeta_del_proyecto\x64\Release
+include\ftd2xx.dll
+en carpeta_del_proyecto\x64\Debug y carpeta_del_proyecto\x64\Release
+
+
+

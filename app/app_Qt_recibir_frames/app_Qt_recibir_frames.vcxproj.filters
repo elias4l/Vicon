@@ -43,9 +43,15 @@
     <ClCompile Include="fuentevideo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="procesarvideo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fuentevideo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="procesarvideo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
