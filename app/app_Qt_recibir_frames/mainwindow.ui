@@ -181,6 +181,19 @@
      <string>Detectar rostros</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="buttonReiniciarFPGA">
+    <property name="geometry">
+     <rect>
+      <x>560</x>
+      <y>10</y>
+      <width>101</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Reiniciar FPGA</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -208,4 +221,3 @@
  </resources>
  <connections/>
 </ui>
-

@@ -23,6 +23,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 -- port map (
 --     clk     => CLK, -- i
 --     reset   => MRST, -- i
+--     reset_out => Ctrl_reset, -- o
     
 --     CAM_read --------------------------
 --     CAM_read_reset => CtrlCAM_read_reset,-- o
@@ -50,6 +51,7 @@ entity CONTROL is
     Port (
         clk                 : in  STD_LOGIC;
         reset               : in  STD_LOGIC;
+        reset_out           : out  STD_LOGIC;
         -- CAM_read
         CAM_read_reset      : out STD_LOGIC;
         CAM_read_en         : out STD_LOGIC;
@@ -74,7 +76,7 @@ end CONTROL;
 architecture Behavioral of CONTROL is
     type state_type is (idle, RX_init_ftdi, RX_wait, RX_init_cam_read, RX_wait_pclk, TX_enable, TX_wait, TX_fifo_pop);
     signal state_reg, state_next: state_type;
-    
+    signal reset_out_reg, reset_out_next : STD_LOGIC;
     -- CAM_read
     signal CAM_read_reset_next, CAM_read_reset_reg : STD_LOGIC;
     signal CAM_read_en_next, CAM_read_en_reg : STD_LOGIC;
@@ -92,6 +94,7 @@ begin
     begin
         if reset='1' then
             state_reg <= idle;
+            reset_out_reg <= '0';
             CAM_read_reset_reg <= '1';
             CAM_read_en_reg <= '0';
             CAM_read_color_reg <= '0';
@@ -101,6 +104,7 @@ begin
             FTDI_IF_wrn_rd_reg <= '1';
         elsif rising_edge(clk) then-- Las salidas deben ser registradas: olvida si son tipo Moore o Mealy.
             state_reg <= state_next;
+            reset_out_reg <= reset_out_next;
             CAM_read_reset_reg <= CAM_read_reset_next;
             CAM_read_en_reg <= CAM_read_en_next;
             CAM_read_color_reg <= CAM_read_color_next;
@@ -117,6 +121,7 @@ begin
     begin
     --EC34. Asignación por defecto: simplifica el código y evita LATCHES no deseados.
     state_next <= state_reg;
+    reset_out_next <= reset_out_reg;
     CAM_read_reset_next <= CAM_read_reset_reg;
     CAM_read_en_next <= CAM_read_en_reg;
     CAM_read_color_next <= CAM_read_color_reg;
@@ -154,6 +159,7 @@ begin
             end if;
 
         when RX_init_cam_read => -- inicializa la lectura de la camara, activando CAM_read_en y CAM_read_color segun el comando recibido.
+            reset_out_next <= FTDI_IF_DOUT(7); -- El MSB indica activar reset de la FPGA, en cuyo caso todo sera reestablecido en el siguiente ciclo.
             CAM_read_en_next <= FTDI_IF_DOUT(0); -- BIT0 indica si se activa la lectura de la camara.
             CAM_read_color_next <= FTDI_IF_DOUT(1); -- BIT1 indica color o BN.
             if (FTDI_IF_DOUT(0) = '1') then
@@ -196,6 +202,7 @@ begin
     end case;
     end process COMB;
     
+    reset_out <= reset_out_reg;
     CAM_read_en <= CAM_read_en_reg;
     CAM_read_color <= CAM_read_color_reg;
     CAM_read_reset <= CAM_read_reset_reg;

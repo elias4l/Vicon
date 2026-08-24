@@ -12,6 +12,7 @@ class FuenteVideo
 public:
     FuenteVideo() = default; // Constructor.
     ~FuenteVideo(); // Destructor.
+    bool enviarComando(unsigned char comando); // Envia cualquier comando. Usado para enviar reset.
     bool conectarFTDI(int indiceDispositivo); // Conecta y configura la conexion con el dispositivo FTDI.
     void desconectarFTDI(); // Detiene la captura de frames y desconecta al dispostivo FTDI.
     bool dispFTDIConectado() const; // Funcion de consulta para saber si el dispositivo esta conectado (handler != nullptr).

@@ -67,6 +67,20 @@ MainWindow::MainWindow(QWidget *parent)
             }
         });
 
+
+// BOTON CONECTAR/DESCONECTAR DISPOSITIVO FTDI.
+//===============================================
+connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
+    {
+        comandoFPGA = 0x80; // 10000000.
+
+        if (!hiloFuenteVideo.enviarComando(comandoFPGA))
+        {
+            QMessageBox::critical(this, "Error FTDI.", "No se pudo reiniciar la FPGA.");
+        }
+    }
+);
+
 // BOTON VISUALIZAR VIDEO.
 //===============================================
     connect(ui.buttonVideo, &QPushButton::clicked, this, [this]()

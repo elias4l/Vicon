@@ -7,6 +7,18 @@ FuenteVideo::~FuenteVideo() // Destructor.
     desconectarFTDI(); // Detiene el bucle de recepcion de frames, cierra el hilo y desconecta el dispositivo FTDI.
 }
 
+bool FuenteVideo::enviarComando(unsigned char comando) // Envia comando pasado por parametroal dispositivo FTDI.
+{
+    if (ftHandle == nullptr)
+    {
+        return false;
+    }
+
+    DWORD bytesEscritos = 0;
+    FT_STATUS ftStatus = FT_Write(ftHandle, &comando, 1, &bytesEscritos);
+    return ftStatus == FT_OK && bytesEscritos == 1;
+}
+
 bool FuenteVideo::conectarFTDI(int indiceDispositivo)
 {
     FT_STATUS ftStatus = FT_Open(indiceDispositivo, &ftHandle); // Abrir el dispositivo FTDI segun el indice.

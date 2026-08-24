@@ -38,7 +38,9 @@ architecture Behavioral of TOP is
 ------------------------------------------
 -- SENALES RELACIONADAS CON EL MODULO CTRL
 ------------------------------------------
---senales del odulo de control
+--senales del modulo de control
+signal Ctrl_reset : std_logic;
+
 signal CtrlCAM_read_reset : std_logic;
 signal CtrlCAM_read_en : std_logic;
 signal CtrlCAM_read_color : std_logic;
@@ -150,7 +152,7 @@ signal FT245_TXEn_sync: STD_LOGIC;
 
 begin
 
-MRST <= btnC;
+MRST <= Ctrl_reset or btnC;
 
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL MODULO CTRL
@@ -160,6 +162,7 @@ MRST <= btnC;
     port map (
         clk     => CLK, -- i
         reset   => MRST, -- i
+        reset_out => Ctrl_reset, -- o
         
     -- CAM_read --------------------------
         CAM_read_reset => CtrlCAM_read_reset,-- o
