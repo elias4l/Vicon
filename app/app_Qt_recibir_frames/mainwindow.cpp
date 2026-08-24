@@ -245,6 +245,14 @@ void MainWindow::capturarUnFrame()
         {
             frameMostrado = frameProcesado;
         }
+        else // Para evitar frames desordenados, si no se ha procesado un frame, no se cambia el mostrado actualmente.
+        {
+            if (flagVideoActivo)
+            {
+                temporizadorSigFrame.start(10);
+            }
+            return; 
+        }
     }
     
     // Convertir Mat de OpenCV a formato para el interfaz de Qt.
