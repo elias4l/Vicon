@@ -1,7 +1,8 @@
 #include "procesarvideo.h"
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/imgproc/imgproc.hpp> // Usado en cvtColr(), calcHist(), rectangle() ..
 #include <opencv2/video/tracking.hpp> // Usado con el algoritmo Camshift.
-#include <vector>
+#include <vector> // Almacenar los rostros, ventanas para Camshift, ..
+#include <algorithm> // Gestion de los rostros detectados.
 
 
 ProcesarVideo::~ProcesarVideo()
@@ -14,19 +15,29 @@ bool ProcesarVideo::cargarClasificadorHaar(const std::string& ruta)
     return clasificadorCascadaHaar.load(ruta); // Cargar archivo .xml con el algoritmo de cascada Haar.
 }
 
+bool ProcesarVideo::cargarClasificadorOjos(const std::string& ruta)
+{
+    return clasificadorOjosHaar.load(ruta); // Cargar archivo .xml con el algoritmo de cascada Haar para ojos.
+}
+
+void ProcesarVideo::usarCamShift(bool valor) // Establece el indicador privado para usar o no Camshift.
+{
+    usarSeguimientoCamShift = valor;
+}
+
 void ProcesarVideo::iniciarHiloProcesarFrames()
 {
     if (flagDeteccionRostrosActivo) // No hacer nada si ya esta iniciado y procesando.
     {
         return;
     }
-    if (hiloDeteccionRostros.joinable()) // Si el hilo estaba activo sin procesar, finalizarlo.
+    if (hiloDeteccionRostros.joinable()) // Si el hilo estaba activo sin procesar, o pendiente de recoger, finalizarlo.
     {
         hiloDeteccionRostros.join();
     }
 
-    flagDeteccionRostrosActivo = true; // Flag de control del hilo activado.
-    hiloDeteccionRostros = std::thread(&ProcesarVideo::bucleProcesarFrame, this); // Iniciar hilo con funcion principal bucleProcesamiento().
+    flagDeteccionRostrosActivo = true; // Flag de control del bucle principal en el hilo activado.
+    hiloDeteccionRostros = std::thread(&ProcesarVideo::bucleProcesarFrames, this); // Iniciar hilo con funcion principal bucleProcesamiento().
 }
 
 void ProcesarVideo::detenerHiloProcesarFrames()
@@ -48,17 +59,13 @@ void ProcesarVideo::detenerHiloProcesarFrames()
     // Variables usadas con Camshift reestablecidas.
     seguimientoRostroActivo = false;
     contadorFramesSeguimientoRostro = 0;
-    ventanaSeguimiento = Rect();
-    tamanoVentanaSeguimiento = Size();
-    histogramaH.release();
+    ventanasSeguimiento.clear();
+    histogramasGris.clear();
 }
 
+// Obtiene el frame e indica que hay un nuevo frame por procesar.
 void ProcesarVideo::procesarUnFrame(const Mat& frame)
 {
-    if(!flagDeteccionRostrosActivo || frame.empty()) // Si el hilo esta desactivado o el frame es nulo, no hacer nada.
-    {
-        return;
-    }
     {
         std::lock_guard<std::mutex> bloqueo(mutexFrames); 
         framePendienteProcesar = frame; // Sobreescribir con el frame mas reciente.
@@ -81,201 +88,228 @@ bool ProcesarVideo::obtenerUltimoFrameProcesado(Mat& frame)
 }
 
 // Inicializa histograma en la ROI detectada por el algoritmo Haar.
-bool ProcesarVideo::iniciarSeguimientoRostro(const Mat& frame, const Rect& region)
+bool ProcesarVideo::iniciarSeguimientoRostro(const Mat& frame, const Rect& region, Rect& ventana, Mat& histograma)
 {
     Rect limites(0, 0, frame.cols, frame.rows); // Limitar la ROI a los limites del frame.
-    ventanaSeguimiento = region & limites;
-    if (ventanaSeguimiento.width <= 0 || ventanaSeguimiento.height <= 0) // ROI fuera de rango, salir.
+    ventana = region & limites;
+    if (ventana.width <= 0 || ventana.height <= 0) // ROI fuera de rango, salir.
     {
         return false;
     }
 
-    tamanoVentanaSeguimiento = ventanaSeguimiento.size(); // Guardar el tamano de la ROI detectado por Haar.
-    int vmin = 10; // Brillo minimo (sin negros).
-    int vmax = 256; // Brillo maximo.
-    int smin = 30; // Saturacion minima (sin grises/blancos).
-    int tamanoHistograma = 16; // Bins en el histograma del tono o Hue.
+    int tamanoHistograma = 32; // Bins en el histograma de intensidad.
+    int vmin = 10; // Intensidad minima, descarta pixeles casi negros.
+    int vmax = 245; // Intensidad maxima, descarta pixeles casi blancos.
+    float rangoGris[] = { 0.0f, 256.0f }; // Rango de intensidad. [0, 256) , de 0 a 255.
+    const float* rangoHistograma = rangoGris; // Puntero al rango, usado por calcHist().
 
-    Mat hsv, tono, mascara; // Matrices temporales
+    Mat frameGris;
+    if (frame.channels() == 3) // RGB.
+    {
+        cvtColor(frame, frameGris, COLOR_RGB2GRAY); // Pasa a escala de grises.
+    }
+    else
+    {
+        frameGris = frame;
+    }
 
-    cvtColor(frame, hsv, COLOR_RGB2HSV); // Pasar frame de RGB a HSV.
-    inRange(hsv, Scalar(0, smin, vmin), Scalar(180, 256, vmax), mascara); // Mascara, descarta zonas fuera de rango en brillo (V) y saturacion (S).
-    
-    tono.create(hsv.size(), hsv.depth()); // Mascara donde guardar el tono del frame.
-    int canales[] = { 0, 0 };
-    mixChannels(&hsv, 1, &tono, 1, canales, 1); // Obtener de la mascara unicamente el canal 0, tono o Hue.
-
-    if (countNonZero(mascara(ventanaSeguimiento)) == 0) // Comprobar que la mascara del ROI tiene pixeles validos y no son todos 0.
+    Mat mascara;
+    inRange(frameGris, Scalar(vmin), Scalar(vmax), mascara); // Mascara binaria, descarta blancos y negros. 255: intensidad entre vmin y vmax. 0: intensidad fuera del intervalo.
+    Mat roi(frameGris, ventana); // Parte del frame dentro de ventana.
+    Mat roiMascara(mascara, ventana); // Parte de la mascara dentro de ventana.
+    Mat histogramaFrame, histogramaRostro;
+    calcHist(&frameGris, 1, 0, mascara, histogramaFrame, 1, &tamanoHistograma, &rangoHistograma); // Intensidades dentro del frame.
+    calcHist(&roi, 1, 0, roiMascara, histogramaRostro, 1, &tamanoHistograma, &rangoHistograma); // Intensidades dentro del rostro.
+    if (histogramaFrame.empty() || histogramaRostro.empty())
     {
         return false;
     }
-    Mat roiTono(tono, ventanaSeguimiento); // ROI de la mascara unicamente con los pixeles del tono.
-    Mat roiMascara(mascara, ventanaSeguimiento); // ROI de la mascara.
-
-    float rangoTono[] = { 0.0f, 180.0f }; // Rango dinamico del canal Hue usado en OpenCV.
-    const float* rangoHistograma = rangoTono;
-    int canalHistograma[] = { 0 }; // Procesar unicamente el primer canal, tono.
-
-    calcHist(&roiTono, 1, canalHistograma, roiMascara, histogramaH, 1, &tamanoHistograma, &rangoHistograma); // Calcular el histograma de color de la ROI, usando la mascara.
-    if (histogramaH.empty())
-    {
-        return false;
-    }
-    normalize(histogramaH, histogramaH, 0, 255, NORM_MINMAX); // Escalar histograma entre 0 y 255.
-    seguimientoRostroActivo = true; // Activar seguimiento por color.
-    contadorFramesSeguimientoRostro = 0; // Contador frames Camshift.
+    normalize(histogramaRostro, histogramaRostro, 1, 0, NORM_L1); // Valor normalizado a 1, en vez de absolutos.
+    normalize(histogramaFrame, histogramaFrame, 1, 0, NORM_L1);
+    histogramaFrame += 0.000001f; // Para evitar posibles divisiones por cero en divide().
+    divide(histogramaRostro, histogramaFrame, histograma);
+    normalize(histograma, histograma, 0, 255, NORM_MINMAX);
     return true;
 }
 
-// Rastrea el rostro segun el histograma calculado en iniciarCamshift().
-bool ProcesarVideo::actualizarSeguimientoRostro(const Mat& frame)
+// Rastrea el rostro segun el histograma calculado en iniciarSeguimientoRostro().
+bool ProcesarVideo::actualizarSeguimientoRostro(const Mat& frame, Rect& ventana, const Mat& histograma)
 {
-    if (!seguimientoRostroActivo || histogramaH.empty() || ventanaSeguimiento.width <= 0 || ventanaSeguimiento.height <= 0)
+    if (histograma.empty() || ventana.width <= 0 || ventana.height <= 0)
     {
-        return false; // Salir si se ha desactivado el seguimiento, o si el histograma o la ventana son incorrectas.
+        return false; // Salir si el histograma o la ventana son incorrectas.
     }
 
     Rect limites(0, 0, frame.cols, frame.rows); // Limitar la ventana de seguimiento con el frame.
-    ventanaSeguimiento = ventanaSeguimiento & limites;
-    if (ventanaSeguimiento.width <= 0 || ventanaSeguimiento.height <= 0)
+    ventana = ventana & limites;
+    if (ventana.width <= 0 || ventana.height <= 0)
     {
         return false;
     }
 
-    int vmin = 10; // Mismos valores que en iniciarCamshift().
-    int vmax = 256;
-    int smin = 30;
-    Mat hsv; // Temporales.
-    Mat tono;
-    Mat mascara;
-    Mat backProjection;
+    Mat frameGris;
+    if (frame.channels() == 3)
+    {
+        cvtColor(frame, frameGris, COLOR_RGB2GRAY);
+    }
+    else
+    {
+        frameGris = frame;
+    }
 
-    cvtColor(frame, hsv, COLOR_RGB2HSV); // Igual que en iniciarCamshift(). Pasar el frame al espacio de colores HSV.
-    inRange(hsv, Scalar(0, smin, vmin), Scalar(180, 256, vmax), mascara); // Mascara, descarta zonas fuera de rango en brillo (V) y saturacion (S).
+    Mat backproj; // Imagen de retroporyeccion, para indicar los pixeles que mas se parecen al histograma del rostro.
+    int vmin = 10; // Mismos limites de intensidad usados al calcular el histograma.
+    int vmax = 245;
+    float rangoGris[] = { 0.0f, 256.0f };
+    const float* rangoBackProjection = rangoGris;
 
-    tono.create(hsv.size(), hsv.depth());  // Mascara donde guardar el tono del frame.
-    int canales[] = { 0, 0 };
-    mixChannels(&hsv, 1, &tono, 1, canales, 1); // Obtener de la mascara unicamente el canal 0, tono o Hue.
+    calcBackProject(&frameGris, 1, 0, histograma, backproj, &rangoBackProjection); // A mas peso tengo un nivel de gris en el rostro, mayor valor en backproj.
 
-    float rangoTono[] = { 0.0f, 180.0f }; // Rango dinamico del canal Hue usado en OpenCV.
-    const float* rangoBackProjection = rangoTono;
-    int canalBackProjection[] = { 0 };
+    Mat mascara; // Usar solo los pixeles con niveles de gris validos.
+    inRange(frameGris, Scalar(vmin), Scalar(vmax), mascara);
+    backproj &= mascara;
+    threshold(backproj, backproj, 32, 255, THRESH_TOZERO); // Eliminar de de backproj los coincidencias con el hostograma poco fuertes (<32).
 
-    calcBackProject(&tono, 1, canalBackProjection, histogramaH, backProjection, &rangoBackProjection); // Calculo de retroproyeccion, cada pixel ahora representa la probabilidad de pertenecer al histograma.
-    backProjection &= mascara; // Descartar zonas segun la mascara de saturacion y brillo.
-
-    Rect ventanaCamShift = ventanaSeguimiento; // Ventana usada por CamShift().
-    RotatedRect cajaSeguimiento = CamShift(backProjection, ventanaCamShift, TermCriteria(TermCriteria::EPS | TermCriteria::COUNT, 10, 1)); // Algoritmo CamShift. Parada en 10 iteraciones o si cambio < 1 pixel.
+    int anchoAnterior = ventana.width; // Conservar el tamano anterior de la ventana de seguimiento.
+    int altoAnterior = ventana.height;
+    RotatedRect cajaSeguimiento = CamShift(backproj, ventana, TermCriteria(TermCriteria::EPS | TermCriteria::COUNT, 10, 1)); // Actualizar posicion del rostro, usando Camshift y backproj. Parte desde ventana, y busca los pixeles donde el parecido tiene mayor intensidad. 10 iteraciones o precision de 1 pixel.
     if (cajaSeguimiento.size.width <= 1.0f || cajaSeguimiento.size.height <= 1.0f)
     {
         return false; // Abortar si el cuadro colapsa.
     }
-    if (tamanoVentanaSeguimiento.width <= 0 || tamanoVentanaSeguimiento.height <= 0 || tamanoVentanaSeguimiento.width > frame.cols || tamanoVentanaSeguimiento.height > frame.rows)
+
+    int nuevaX = static_cast<int>(cajaSeguimiento.center.x) - anchoAnterior / 2; // Conservar el centro calculado por CamShift.
+    int nuevaY = static_cast<int>(cajaSeguimiento.center.y) - altoAnterior / 2;
+    nuevaX = std::max(0, std::min(nuevaX, frame.cols - anchoAnterior)); // Mantener la ventana dentro del frame.
+    nuevaY = std::max(0, std::min(nuevaY, frame.rows - altoAnterior));
+    ventana = Rect(nuevaX, nuevaY, anchoAnterior, altoAnterior); // Reconstruir con las dimensiones anteriores.
+
+    ventana = ventana & limites;
+    if (ventana.width <= 0 || ventana.height <= 0)
     {
         return false;
     }
-
-    int nuevaX = static_cast<int>(cajaSeguimiento.center.x) - tamanoVentanaSeguimiento.width / 2; // Centro de la nueva posicion calculada.
-    int nuevaY = static_cast<int>(cajaSeguimiento.center.y) - tamanoVentanaSeguimiento.height / 2;
-    if (nuevaX < 0) // Mantener dentro cuadro dentro del frame.
-    {
-        nuevaX = 0;
-    }
-    if (nuevaY < 0)
-    {
-        nuevaY = 0;
-    }
-    if (nuevaX + tamanoVentanaSeguimiento.width > frame.cols)
-    {
-        nuevaX = frame.cols - tamanoVentanaSeguimiento.width;
-    }
-    if (nuevaY + tamanoVentanaSeguimiento.height > frame.rows)
-    {
-        nuevaY = frame.rows - tamanoVentanaSeguimiento.height;
-    }
-    ventanaSeguimiento = Rect(nuevaX, nuevaY, tamanoVentanaSeguimiento.width, tamanoVentanaSeguimiento.height);
     return true;
 }
 
-// Lanza la deteccion Haar seguida de seguimiento de rostro con CamShift().
-void ProcesarVideo::bucleProcesarFrame()
+// Funcion principal del hilo. Lanza la deteccion Haar seguida de seguimiento de rostro con CamShift().
+void ProcesarVideo::bucleProcesarFrames()
 {
     while(true)
     {
         Mat frame; // Aqui se guarda el frame sobre el que se realiza el procesamiento con OpenCV.
         {
-            std::unique_lock<std::mutex> bloqueo(mutexFrames); // Bloquear acceso compartido al frame, y suspender el hilo mientras espera al siguiente frame por procesar o si se detiene todo el procesamiento de frames.
+            std::unique_lock<std::mutex> bloqueo(mutexFrames); // Bloquear acceso compartido al frame, y suspender el hilo mientras espera al siguiente frame por procesar. Libera el mutex mientras espera, lo adquiere al despertar.
             frameDisponible.wait(bloqueo, [this]() 
             {
-                return !flagDeteccionRostrosActivo || hayFramePendienteProcesar;
-            });
+                return !flagDeteccionRostrosActivo || hayFramePendienteProcesar; 
+            }); // Cierra lamda y llama a wait().
 
-            if(!flagDeteccionRostrosActivo) // Finalizar bucle si el hilo se desperto para ello.
+            if(!flagDeteccionRostrosActivo) // Finalizar bucle si se ordena detener el procesamiento.
             {
-                break;
+                break; // Detener bucle while.
             }
 
             frame = framePendienteProcesar; // Copiar nuevo frame.
-            framePendienteProcesar.release(); // Liberar memoria.
-            hayFramePendienteProcesar = false;
+            framePendienteProcesar.release(); // frame mantiene la referencia.
+            hayFramePendienteProcesar = false; // Frame adquirido.
         }
 
-        Mat resultado = frame.clone(); // Copia sobre la que dibujar los resultados.
+        Mat frameProcesado = frame.clone(); // Copia sobre la que dibujar los resultados del procesamiento.
 
-        if (!seguimientoRostroActivo || contadorFramesSeguimientoRostro >= FRAMES_CAMSHIFT) // Haar se ejecuta al comenzar el bucle, al perder el seguimiento, o tras 10 frames con seguimiento.
+        Mat frameGris; // Haar y CamShift trabajan con el mismo frame en escala de grises mejorado.
+        if (frame.channels() == 3)
         {
-            Mat frameGris; // Haar trabaja en escala de grises.
             cvtColor(frame, frameGris, COLOR_RGB2GRAY);
+        }
+        else
+        {
+            frameGris = frame.clone();
+        }
+        equalizeHist(frameGris, frameGris); // Mejorar el contraste antes de aplicar Haar y CamShift.
 
-            std::vector<Rect> caras; // Vector dinamico donde guardar los rostros detectados.
-            clasificadorCascadaHaar.detectMultiScale(frameGris, caras, 1.1, 3, 0, Size(30, 30), Size(500, 500)); // Deteccion de rostros multiescala.
-            int areaMayor = 0; // Seleccionar el rostro de mayor area.
-            Rect caraMayor; // Estructura para guardar el rostro del rostro con mayor area.
-            for (int i = 0; i < static_cast<int>(caras.size()); i++)
+        if (!usarSeguimientoCamShift || !seguimientoRostroActivo || contadorFramesSeguimientoRostro >= FRAMES_CAMSHIFT) // Haar se ejecuta en cada frame sin CamShift, al perder el seguimiento, o tras 10 frames con seguimiento.
+        {
+            std::vector<Rect> rostros; // Vector dinamico donde guardar los rostros detectados.
+            clasificadorCascadaHaar.detectMultiScale(frameGris, rostros, 1.1, 3, 0, Size(24, 24), Size(250, 250)); // Buscar rostros en framegris y guardarlos en el vector caras. Factor de escala del 10%, 3 detecciones vecinas minimas, y entre 24 y 250 px de lado.
+
+            // Ordenar los rostros por area para seleccionar como maximo los cuatro mayores.
+            std::sort(rostros.begin(), rostros.end(), [](const Rect& caraA, const Rect& caraB)
             {
-                int areaCara = caras[i].width * caras[i].height; // Area de la cara i.
-                if (areaCara > areaMayor) // Guardar si rostro i es el mayor.
+                return caraA.area() > caraB.area();
+            });
+
+            ventanasSeguimiento.clear(); // Nueva deteccion Haar.
+            histogramasGris.clear();
+            int rostrosAceptados = 0; // Rosotros validos, es decir con al menos un ojo.
+            for (int i = 0; (i < static_cast<int>(rostros.size())) && (rostrosAceptados < MAX_ROSTROS); i++)
+            {
+                // Detectar ojos en cada rostro detectado.
+                Mat rostroRoi = frameGris(rostros[i]);
+                std::vector<Rect> ojos;    // Vector de los ojos descubiertos
+                clasificadorOjosHaar.detectMultiScale(rostroRoi, ojos, 1.1, 2, 0, Size(3, 3)); // Ahora se usa el clasificador de los ojos.
+                if (ojos.empty()) // Rostro no valido.
                 {
-                    areaMayor = areaCara;
-                    caraMayor = caras[i];
+                    continue;
+                }
+                rostrosAceptados++;
+                rectangle(frameProcesado, rostros[i], Scalar(0, 255, 0), 2); // Mostrar con un recuadro verde el rostro valido.
+                for (int j = 0; j < static_cast<int>(ojos.size()); j++) // Mostrar con recuadros los ojos detectados dentro del rostro.
+                {
+                    Rect ojo_j(rostros[i].x + ojos[j].x, rostros[i].y + ojos[j].y, ojos[j].width, ojos[j].height);
+                    rectangle(frameProcesado, ojo_j, Scalar(0, 255, 0), 2);
+                }
+
+                // Inicializar CamShift para cada rostro que contiene al menos un ojo, hasta un maximo de cuatro rostros.
+                if (usarSeguimientoCamShift && (static_cast<int>(ventanasSeguimiento.size()) < MAX_ROSTROS))
+                {
+                    Rect ventana;
+                    Mat histograma;
+                    if (iniciarSeguimientoRostro(frameGris, rostros[i], ventana, histograma))
+                    {
+                        ventanasSeguimiento.push_back(ventana);
+                        histogramasGris.push_back(histograma);
+                    }
                 }
             }
 
-            if (areaMayor > 0) // Hay al menos un rostro.
-            {
-                seguimientoRostroActivo = iniciarSeguimientoRostro(frame, caraMayor); // Usar el mayor rostro detectado con Haar para inicializar CamShift.
-                rectangle(resultado, caraMayor, Scalar(0, 255, 0), 2); // Mostrar con un recuadro verde.
-                if (!seguimientoRostroActivo) // Si CamShift() falla.
-                {
-                    contadorFramesSeguimientoRostro = 0;
-                    histogramaH.release(); // Liberar memoria de histograma.
-                }
-            }
-            else // No hay ningun rostro que pueda utilizarse para iniciar CamShift.
-            {
-                seguimientoRostroActivo = false; // Detener seguimiento.
-                contadorFramesSeguimientoRostro = 0;
-                histogramaH.release(); // Liberar memoria de histograma.
-            }
+            seguimientoRostroActivo = usarSeguimientoCamShift && !ventanasSeguimiento.empty();
+            contadorFramesSeguimientoRostro = 0;
         }
         else // En los frames intermedios se utiliza CamShift.
         {
-            seguimientoRostroActivo = actualizarSeguimientoRostro(frame);
+            std::vector<Rect> ventanasCamshift;
+            std::vector<Mat> histogramasCamshiftGris;
+
+            for (int i = 0; i < static_cast<int>(ventanasSeguimiento.size()); i++)
+            {
+                Rect ventana = ventanasSeguimiento[i];
+                if (actualizarSeguimientoRostro(frameGris, ventana, histogramasGris[i]))
+                {
+                    ventanasCamshift.push_back(ventana);
+                    histogramasCamshiftGris.push_back(histogramasGris[i]);
+                    rectangle(frameProcesado, ventana, Scalar(0, 255, 0), 2); // Verde: region seguida mediante CamShift.
+                }
+            }
+
+            ventanasSeguimiento = ventanasCamshift;
+            histogramasGris = histogramasCamshiftGris;
+            seguimientoRostroActivo = !ventanasSeguimiento.empty();
             if (seguimientoRostroActivo)
             {
                 contadorFramesSeguimientoRostro++;
-                rectangle(resultado, ventanaSeguimiento, Scalar(0, 0, 255), 2); // Azul: region seguida mediante CamShift.
             }
-            else // Si CamShift pierde la region, se vuelve a ejecutar Haar.
+            else // Si CamShift pierde todas las regiones, se vuelve a ejecutar Haar.
             {
                 contadorFramesSeguimientoRostro = 0;
-                histogramaH.release();
             }
         }
 
         {
             std::lock_guard<std::mutex> bloqueo(mutexFrames);
-            ultimoFrameProcesado = resultado; // Sobreescribir frame con el nuevo resultado.
+            ultimoFrameProcesado = frameProcesado; // Sobreescribir frame con el nuevo resultado.
         }
     }
 }
+
+

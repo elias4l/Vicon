@@ -16,39 +16,14 @@ MainWindow::MainWindow(QWidget *parent)
 //===============================================
 //  CONECTAR DISPOSITIVO FTDI
 //===============================================
-    DWORD numDispositivo = 0;
-    ftStatus = FT_CreateDeviceInfoList(&numDispositivo); // Devuelve los dispositivos conectados al PC.
+    actualizarDispositivosFTDI();
 
-    if (ftStatus != FT_OK)
-    {
-        QMessageBox::critical(this, "Error FTDI", "Error obteniendo la lista de dispositivos.");
-        ui.buttonConectar->setEnabled(false);
-        return;
-    }
-
-    for (DWORD i = 0; i < numDispositivo; i++) // Leer los detalles de cada dispositivo y anadirlo en el ComboBox.
-    {
-        DWORD flags = 0; // Parametros del nodo tipo _ft_device_list_info_node que devuelve FT_GetDeviceInfoDetail().
-        DWORD type = 0;
-        DWORD id = 0;
-        DWORD locId = 0;
-        char serialNumber[16] = {};
-        char description[64] = {};
-        FT_HANDLE ftHandle_aux = nullptr;
-        ftStatus = FT_GetDeviceInfoDetail(i, &flags, &type, &id, &locId, serialNumber, description, &ftHandle_aux);
-
-        if (ftStatus == FT_OK) // Incorporar dispositivo conectado al ComboBox.
+// BOTON ACTUALIZAR DISPOSITIVOS FTDI.
+//===============================================
+    connect(ui.buttonActualizarDisp, &QPushButton::clicked, this, [this]()
         {
-            QString texto = QString::number(i) + " | " + QString::fromLatin1(description) + " | " + QString::fromLatin1(serialNumber);
-            ui.comboDispositivos->addItem(texto, static_cast<int>(i));
-        }
-    }
-
-    if (numDispositivo == 0)
-    {
-        ui.comboDispositivos->addItem("No se encuentran dispositivos FTDI.");
-        ui.buttonConectar->setEnabled(false);
-    }
+            actualizarDispositivosFTDI();
+        });
 
 // BOTON CONECTAR/DESCONECTAR DISPOSITIVO FTDI.
 //===============================================
@@ -65,10 +40,13 @@ MainWindow::MainWindow(QWidget *parent)
 
                 ui.buttonConectar->setText("Desconectar");
                 ui.comboDispositivos->setEnabled(false);
+                ui.buttonActualizarDisp->setEnabled(false);
                 ui.labelVideo->setText("FTDI conectado");
                 ui.buttonVideo->setText("Iniciar video");
                 ui.buttonVideo->setEnabled(true);
                 ui.checkBoxVideoColor->setEnabled(true);
+                ui.checkBoxDetectarRostros->setEnabled(true);
+                ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             }
             else // Dispositivo conectado, detener video y desconectar.
             {
@@ -79,9 +57,12 @@ MainWindow::MainWindow(QWidget *parent)
 
                 ui.buttonConectar->setText("Conectar");
                 ui.comboDispositivos->setEnabled(true);
-                ui.labelVideo->setText("Sin señal de video.");
+                ui.buttonActualizarDisp->setEnabled(true);
+                ui.labelVideo->setText("Sin seï¿½al de video.");
                 ui.buttonVideo->setEnabled(false);
                 ui.checkBoxVideoColor->setEnabled(false);
+                ui.checkBoxDetectarRostros->setEnabled(false);
+                ui.checkboxCamshift->setEnabled(false);
                 ui.labelFps->setText("0.0");
             }
         });
@@ -94,43 +75,87 @@ MainWindow::MainWindow(QWidget *parent)
         {
             flagVideoActivo = false;
             temporizadorSigFrame.stop();
-            hiloFuenteVideo.detenerHiloRecepcionFrames(); // Detener el bucle de recepcion y cerrar el hilo.
+            hiloFuenteVideo.detenerHiloFuenteVideo(); // Detener el bucle de recepcion y cerrar el hilo.
             hiloProcesadorVideo.detenerHiloProcesarFrames(); // Detiene el hilo de procesado con OpenCV.
 
             ui.labelVideo->clear(); // Eliminar frame y mostrar texto de video detenido.
             ui.labelVideo->setText("Video detenido");
             ui.buttonVideo->setText("Iniciar video"); // Resto de botones
             ui.checkBoxVideoColor->setEnabled(true);
+            ui.checkBoxDetectarRostros->setEnabled(true);
+            ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             ui.labelFps->setText("0.0");
         }
         else // Iniciar el video.
         {
-            const std::string rutaDetector = "C:/opencv-4.14.0/opencv/sources/data/haarcascades/haarcascade_frontalface_alt2.xml";
-            if(!hiloProcesadorVideo.cargarClasificadorHaar(rutaDetector))
+            if (detectarRostros)
             {
-                QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de rostros.");
+                const std::string rutaDetector = "C:/opencv-4.14.0/opencv/sources/data/haarcascades/haarcascade_frontalface_alt2.xml";
+                if(!hiloProcesadorVideo.cargarClasificadorHaar(rutaDetector))
+                {
+                    QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de rostros.");
+                    return;
+                }
+
+                const std::string rutaDetectorOjos = "C:/opencv-4.14.0/opencv/sources/data/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
+                if(!hiloProcesadorVideo.cargarClasificadorOjos(rutaDetectorOjos))
+                {
+                    QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de ojos.");
+                    return;
+                }
+                hiloProcesadorVideo.usarCamShift(seguirRostros);
             }
             
             flagVideoActivo = true;
-            hiloFuenteVideo.iniciarHiloRecepcionFrames(flagVideoColor);
-            hiloProcesadorVideo.iniciarHiloProcesarFrames(); // Lanza el hilo para trabajar con OpenCV.
+            hiloFuenteVideo.iniciarHiloFuenteVideo(videoColor);
+            if (detectarRostros)
+            {
+                hiloProcesadorVideo.iniciarHiloProcesarFrames(); // Lanza el hilo para trabajar con OpenCV.
+            }
             temporizadorFps.start();
             contFramesRecibidos = 0;
             temporizadorSigFrame.start(10); // Solicitar el primer frame. Qt comprueba cada 10 ms si hay un frame nuevo disponible.
 
             ui.buttonVideo->setText("Detener video");
             ui.checkBoxVideoColor->setEnabled(false);
+            ui.checkBoxDetectarRostros->setEnabled(false);
+            ui.checkboxCamshift->setEnabled(false);
         }
     });
 
 // CHECKBOX VISUALIZAR VIDEO A COLOR.
 //===============================================
-    ui.checkBoxVideoColor->setChecked(flagVideoColor);
+    ui.checkBoxVideoColor->setChecked(videoColor);
     ui.checkBoxVideoColor->setEnabled(false); // Inicialmente desactivado.
 
     connect(ui.checkBoxVideoColor, &QCheckBox::toggled, this, [this](bool checked)
         {
-            flagVideoColor = checked; // Guarda el estado del checkbox.
+            videoColor = checked; // Guarda el estado del checkbox.
+        });
+
+// CHECKBOX DETECTAR ROSTROS.
+//===============================================
+    ui.checkBoxDetectarRostros->setChecked(detectarRostros);
+    ui.checkBoxDetectarRostros->setEnabled(false); // Inicialmente desactivado.
+
+    connect(ui.checkBoxDetectarRostros, &QCheckBox::toggled, this, [this](bool checked)
+        {
+            detectarRostros = checked;
+            ui.checkboxCamshift->setEnabled(checked && hiloFuenteVideo.dispFTDIConectado() && !flagVideoActivo);
+            if (!checked)
+            {
+                ui.checkboxCamshift->setChecked(false);
+            }
+        });
+
+// CHECKBOX SEGUIR ROSTROS CON CAMSHIFT.
+//===============================================
+    ui.checkboxCamshift->setChecked(seguirRostros);
+    ui.checkboxCamshift->setEnabled(false); // Inicialmente desactivado.
+
+    connect(ui.checkboxCamshift, &QCheckBox::toggled, this, [this](bool checked)
+        {
+            seguirRostros = checked;
         });
 
 // TEMPORIZADOR ENCARGADO DE COMPROBAR LA LLEGADA DE FRAMES.
@@ -153,10 +178,12 @@ void MainWindow::capturarUnFrame()
         if(!hiloFuenteVideo.recepcionActiva()) // Si el hilo de recepcion se detuvo por algun error, detener el video mostrado e indicar error.
         {
             flagVideoActivo = false;
-            hiloFuenteVideo.detenerHiloRecepcionFrames(); // Detener el bucle de recepcion y cerrar el hilo.
+            hiloFuenteVideo.detenerHiloFuenteVideo(); // Detener el bucle de recepcion y cerrar el hilo.
             hiloProcesadorVideo.detenerHiloProcesarFrames(); // Cierra el hilo de procesar frames usando OpenCV.
             ui.buttonVideo->setText("Iniciar video");
             ui.checkBoxVideoColor->setEnabled(true);
+            ui.checkBoxDetectarRostros->setEnabled(true);
+            ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             ui.labelFps->setText("0.0");
             QMessageBox::critical(this, "Error de recepcion.", "El hilo FTDI ha dejado de recibir frames");
             return; // No hay frame nuevo disponible, salir de la funcion.
@@ -167,7 +194,7 @@ void MainWindow::capturarUnFrame()
     
     QImage imagen; // Objeto imagen en Qt.
 
-    if (flagVideoColor)
+    if (videoColor)
     {
         imagen = convertirFrameColor(frame); // Frame desde FTDI tiene formato YCbCr 4:2:2.
     }
@@ -181,10 +208,12 @@ void MainWindow::capturarUnFrame()
     {
         flagVideoActivo = false;
         temporizadorSigFrame.stop();
-        hiloFuenteVideo.detenerHiloRecepcionFrames();
+        hiloFuenteVideo.detenerHiloFuenteVideo();
         hiloProcesadorVideo.detenerHiloProcesarFrames();
         ui.buttonVideo->setText("Iniciar video");
         ui.checkBoxVideoColor->setEnabled(true);
+        ui.checkBoxDetectarRostros->setEnabled(true);
+        ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
         ui.labelFps->setText("0.0");
         QMessageBox::critical(this, "Error de imagen.", "No se pudo convertir el frame recibido a RGB.");
         return;
@@ -193,12 +222,15 @@ void MainWindow::capturarUnFrame()
     // Crear un contenedor Mat de OpenCV apuntando a los datos Qimage.
     Mat frameOpenCV(imagen.height(), imagen.width(), CV_8UC3, imagen.bits(), imagen.bytesPerLine());
     frameOpenCV = frameOpenCV.clone(); // Clonar la imagen que luego sera enviada a otro hilo.
-    hiloProcesadorVideo.procesarUnFrame(frameOpenCV); // Enviar la matriz al hilo de OpenCV.
     Mat frameMostrado = frameOpenCV; // Por defecto mostrar la imagen sin procesado.
-    Mat frameProcesado;
-    if(hiloProcesadorVideo.obtenerUltimoFrameProcesado(frameProcesado)) // Si se procesa correctamente, mostrar el resultado.
+    if (detectarRostros)
     {
-        frameMostrado = frameProcesado;
+        hiloProcesadorVideo.procesarUnFrame(frameOpenCV); // Enviar la matriz al hilo de OpenCV.
+        Mat frameProcesado;
+        if(hiloProcesadorVideo.obtenerUltimoFrameProcesado(frameProcesado)) // Si se procesa correctamente, mostrar el resultado.
+        {
+            frameMostrado = frameProcesado;
+        }
     }
     
     // Convertir Mat de OpenCV a formato para el interfaz de Qt.
@@ -229,7 +261,7 @@ void MainWindow::capturarUnFrame()
 //  YCbCr 4:2:2 -> RGB888.
 //===============================================
 
-// Convierte datos de video YCbCr 4:2:2 en pi­xeles RGB de 8 bits, formato que QImage necesita.
+// Convierte datos de video YCbCr 4:2:2 en piï¿½xeles RGB de 8 bits, formato que QImage necesita.
 QImage MainWindow::convertirFrameColor(const std::vector<unsigned char>& frame)
 {
     const int ancho = 640;  // VGA.
@@ -282,7 +314,7 @@ QImage MainWindow::convertirFrameColor(const std::vector<unsigned char>& frame)
 //  Luminancia Y -> RGB888.
 //===============================================
 
-// Convierte datos de video Y en pi­xeles RGB, usado por QImage.
+// Convierte datos de video Y en piï¿½xeles RGB, usado por QImage.
 QImage MainWindow::convertirFrameBN(const std::vector<unsigned char>& frame)
 {
     const int ancho = 640;  // VGA.
@@ -325,6 +357,50 @@ int MainWindow::limitarColor(int valor)
     return valor;
 }
 
+void MainWindow::actualizarDispositivosFTDI()
+{
+    ui.comboDispositivos->clear();
+    DWORD numDispositivo = 0;
+    ftStatus = FT_CreateDeviceInfoList(&numDispositivo); // Devuelve los dispositivos conectados al PC.
+
+    if (ftStatus != FT_OK)
+    {
+        QMessageBox::critical(this, "Error FTDI", "Error obteniendo la lista de dispositivos.");
+        ui.buttonConectar->setEnabled(false);
+        return;
+    }
+
+    for (DWORD i = 0; i < numDispositivo; i++) // Leer los detalles de cada dispositivo y anadirlo en el ComboBox.
+    {
+        DWORD flags = 0; // Parametros del nodo tipo _ft_device_list_info_node que devuelve FT_GetDeviceInfoDetail().
+        DWORD type = 0;
+        DWORD id = 0;
+        DWORD locId = 0;
+        char serialNumber[16] = {};
+        char description[64] = {};
+        FT_HANDLE ftHandle_aux = nullptr;
+        ftStatus = FT_GetDeviceInfoDetail(i, &flags, &type, &id, &locId, serialNumber, description, &ftHandle_aux);
+
+        if (ftStatus == FT_OK) // Incorporar dispositivo conectado al ComboBox.
+        {
+            QString texto = QString::number(i) + " | " + QString::fromLatin1(description) + " | " + QString::fromLatin1(serialNumber);
+            ui.comboDispositivos->addItem(texto, static_cast<int>(i));
+        }
+    }
+
+    if (numDispositivo == 0)
+    {
+        ui.comboDispositivos->addItem("No se encuentran dispositivos FTDI.");
+        ui.buttonConectar->setEnabled(false);
+    }
+    else
+    {
+        ui.buttonConectar->setEnabled(true);
+    }
+}
+
 MainWindow::~MainWindow()
 {}
+
+
 

@@ -68,7 +68,7 @@
    <widget class="QPushButton" name="buttonConectar">
     <property name="geometry">
      <rect>
-      <x>260</x>
+      <x>290</x>
       <y>10</y>
       <width>81</width>
       <height>21</height>
@@ -142,6 +142,45 @@
      <string>Video a color.</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="buttonActualizarDisp">
+    <property name="geometry">
+     <rect>
+      <x>260</x>
+      <y>10</y>
+      <width>21</width>
+      <height>18</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>↻</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="checkboxCamshift">
+    <property name="geometry">
+     <rect>
+      <x>700</x>
+      <y>190</y>
+      <width>101</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Seguir rostros</string>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="checkBoxDetectarRostros">
+    <property name="geometry">
+     <rect>
+      <x>700</x>
+      <y>160</y>
+      <width>121</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Detectar rostros</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
@@ -169,3 +208,4 @@
  </resources>
  <connections/>
 </ui>
+

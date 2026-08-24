@@ -7,6 +7,7 @@
 #include <mutex>
 #include <condition_variable> // Para suspender el hilo si no se usa.
 #include <string>
+#include <vector>
 
 using namespace cv; // Evita usar cv:: en los objetos de OpenCV.
 
@@ -17,24 +18,28 @@ public:
     ~ProcesarVideo();
 
     bool cargarClasificadorHaar(const std::string& ruta); // Carga el modelo de deteccion de caras Haar.
+    bool cargarClasificadorOjos(const std::string& ruta); // Carga el modelo de deteccion de ojos Haar.
+    void usarCamShift(bool activar); // Selecciona seguimiento CamShift o deteccion Haar en cada frame.
     void iniciarHiloProcesarFrames(); // Inicia el hilo OpenCV.
     void detenerHiloProcesarFrames(); // Detiene el hilo.
     void procesarUnFrame(const Mat& frame); // Usado por MainWindow para enviar un frame a procesar.
     bool obtenerUltimoFrameProcesado(Mat& frame); // Usado por MainWindows para obtener el frame procesado.
 
 private:
-    void bucleProcesarFrame(); // Bucle principal del hilo.
-    bool iniciarSeguimientoRostro(const Mat& frame, const Rect& region); // Inicializa el histograma para luego actualizar la posicion del rostro detectado.
-    bool actualizarSeguimientoRostro(const Mat& frame); // Modifica la posicion del rostro detectado.
+    void bucleProcesarFrames(); // Bucle principal del hilo.
+    bool iniciarSeguimientoRostro(const Mat& frame, const Rect& region, Rect& ventana, Mat& histograma); // Inicializa el histograma para luego actualizar la posicion del rostro detectado.
+    bool actualizarSeguimientoRostro(const Mat& frame, Rect& ventana, const Mat& histograma); // Modifica la posicion del rostro detectado.
 
     CascadeClassifier clasificadorCascadaHaar; // Objeto OpenCV para realizar la deteccion de rosotros usando Haar.
+    CascadeClassifier clasificadorOjosHaar; // Objeto OpenCV para detectar ojos dentro de los rostros.
 
-    Rect ventanaSeguimiento; // Contiene la posicion y tamano del area de seguimiento del rostro.
-    Size tamanoVentanaSeguimiento;
-    Mat histogramaH; // Del canal H (HSV) usado por el rostro detectado.
+    std::vector<Rect> ventanasSeguimiento; // Contiene la posicion y tamano de hasta cuatro areas de seguimiento.
+    std::vector<Mat> histogramasGris; // Histogramas de intensidad en escala de grises usados por los rostros detectados.
     bool seguimientoRostroActivo = false; // Indica si Camshift esta rastreando un rostro.
     int contadorFramesSeguimientoRostro = 0;
     const int FRAMES_CAMSHIFT = 10; // Numero de frames que camshift rastrea antes de volver a detectar rostros de nuevo.
+    const int MAX_ROSTROS = 4; // Numero maximo de rostros seguidos simultaneamente.
+    bool usarSeguimientoCamShift = false; // Indica si se usa CamShift entre detecciones Haar.
 
     std::thread hiloDeteccionRostros;
     std::atomic<bool> flagDeteccionRostrosActivo{ false }; // Flag atomico que mantiene el hilo activo.
@@ -46,3 +51,5 @@ private:
     std::mutex mutexFrames;
     std::condition_variable frameDisponible; // Despierta el hilo, asociado a la llegada de un nuevo frame desde MainWindow.
 };
+
+

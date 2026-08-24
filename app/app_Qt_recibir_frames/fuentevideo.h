@@ -15,8 +15,8 @@ public:
     bool conectarFTDI(int indiceDispositivo); // Conecta y configura la conexion con el dispositivo FTDI.
     void desconectarFTDI(); // Detiene la captura de frames y desconecta al dispostivo FTDI.
     bool dispFTDIConectado() const; // Funcion de consulta para saber si el dispositivo esta conectado (handler != nullptr).
-    void iniciarHiloRecepcionFrames(bool color); // Lanza el hilo para recibir frames de forma continua.
-    void detenerHiloRecepcionFrames(); // Detiene y cierra el hilo.
+    void iniciarHiloFuenteVideo(bool color); // Lanza el hilo para recibir frames de forma continua.
+    void detenerHiloFuenteVideo(); // Detiene y cierra el hilo.
     bool obtenerUltimoFrame(std::vector<unsigned char>& frame); // Extrae de la cola el frame mas reciente.
     bool recepcionActiva() const; // Consulta desde MainWindow si el hilo de captura sigue activo.
 

@@ -24,7 +24,9 @@ private:
     unsigned char comandoFPGA = 0; // Byte usado para enviar ordenes a la FPGA.
     // Video.
     bool flagVideoActivo = false; // Flag que indica si la reproduccion de video esta activa.
-    bool flagVideoColor = false; // Flag que indica si se ha seleccionado video a color.
+    bool videoColor = false; // Indica si se ha seleccionado video a color.
+    bool detectarRostros = false; // Indica si se ha seleccionado la deteccion de rostros con OpenCV.
+    bool seguirRostros = false; // Indica si se ha seleccionado el seguimiento de rostros con CamShift.
     QTimer temporizadorSigFrame; // Temporizador sigle-shot para indicar cuando comprobar el siguiente frame.
     QElapsedTimer temporizadorFps; // Mide el tiempo para calcular los fps.
     int contFramesRecibidos = 0; // En un segundo.
@@ -37,5 +39,7 @@ private:
     QImage convertirFrameColor(const std::vector<unsigned char>& frame); // Pasa de YUV a RGB.
     QImage convertirFrameBN(const std::vector<unsigned char>& frame); // Pasa de Y a RGB en escala de grises.
     int limitarColor(int valor); // Recorta a un valor entre 0 y 255.
+    void actualizarDispositivosFTDI(); // Actualiza los dispositivos FTDI disponibles en el ComboBox.
 };
+
 

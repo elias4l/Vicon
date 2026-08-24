@@ -140,7 +140,7 @@ signal UserDataOut  : STD_LOGIC_VECTOR(7 downto 0);
 signal User_wrn_rd  : STD_LOGIC;
 signal User_en  : STD_LOGIC;
 signal User_rdy_flag  : STD_LOGIC;
-signal MRST   : STD_LOGIC := '0';
+signal MRST   : STD_LOGIC;
 
 signal synchronizer_RXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_RXEn_sync: STD_LOGIC;
@@ -149,6 +149,8 @@ signal FT245_TXEn_sync: STD_LOGIC;
 
 
 begin
+
+MRST <= btnC;
 
 ------------------------------------------
 -- CODIGO RELACIONADO CON EL MODULO CTRL

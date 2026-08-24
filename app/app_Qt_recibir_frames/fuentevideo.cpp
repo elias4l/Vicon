@@ -44,7 +44,7 @@ bool FuenteVideo::conectarFTDI(int indiceDispositivo)
 
 void FuenteVideo::desconectarFTDI()
 {
-    detenerHiloRecepcionFrames(); // Detener el bucle de recepcion de frames y cerrar el hilo si esta activo.
+    detenerHiloFuenteVideo(); // Detener el bucle de recepcion de frames y cerrar el hilo si esta activo.
     if (ftHandle != nullptr)
     {
         FT_Close(ftHandle); // Cerrar la conexion con el dispostitvo FTDI.
@@ -119,7 +119,7 @@ bool FuenteVideo::recibirFrame(bool color, std::vector<unsigned char>& frame) //
     return true; // Fotograma almacenado correctamente en el parametro frame.
 }
 
-void FuenteVideo::iniciarHiloRecepcionFrames(bool color) // Inicia la recepcion de frames en un hilo separado.
+void FuenteVideo::iniciarHiloFuenteVideo(bool color) // Inicia la recepcion de frames en un hilo separado.
 {
     if (!dispFTDIConectado() || flagRecepcionActiva)
     {
@@ -157,7 +157,7 @@ void FuenteVideo::bucleRecepcion(bool color) // Metodo principal. Bucle que soli
     }
 }
 
-void FuenteVideo::detenerHiloRecepcionFrames() // Detiene la recepcion de frames y espera a que el hilo termine.
+void FuenteVideo::detenerHiloFuenteVideo() // Detiene la recepcion de frames y espera a que el hilo termine.
 {
     flagRecepcionActiva = false; // Detiene el bucle en bucleRecepcion().
     if (hiloFuenteVideo.joinable())
