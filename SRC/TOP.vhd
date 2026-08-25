@@ -149,6 +149,26 @@ signal FT245_RXEn_sync: STD_LOGIC;
 signal synchronizer_TXEn: STD_LOGIC_VECTOR (1 downto 0);
 signal FT245_TXEn_sync: STD_LOGIC;
 
+------------------------------------------
+-- SENALES CONVERSOR HEX - 7 SEGMENTOS
+------------------------------------------
+signal DIGIT_0_HEX : STD_LOGIC_VECTOR(3 downto 0);
+signal DIGIT_1_HEX : STD_LOGIC_VECTOR(3 downto 0);
+signal DIGIT_2_HEX : STD_LOGIC_VECTOR(3 downto 0);
+signal DIGIT_3_HEX : STD_LOGIC_VECTOR(3 downto 0);
+signal CAT_7_BIT_VECTOR : STD_LOGIC_VECTOR(6 downto 0);
+signal DIGIT_SELECTED_HEX : STD_LOGIC_VECTOR(3 downto 0);
+signal contador_display : unsigned(17 downto 0) := (others => '0');
+signal numero_display : STD_LOGIC_VECTOR(1 downto 0);
+-- senales para calcular los fps entregados por el sensor CMOS.
+signal contador_segundo : integer range 0 to 99_999_999 := 0; --  ciclos en un segundo a 100MHz.
+signal contador_frames_cmos : integer range 0 to 99 := 0;
+signal fps_cmos : integer range 0 to 99 := 0; -- dos BCDs usados.
+signal vsync_anterior : STD_LOGIC := '0'; -- detecta el flanco de subida de CAM_VSYNC_sync .
+-- senales para calcular los fps entregados al dispositivo FTDI.
+signal contador_frames_ftdi : integer range 0 to 99 := 0;
+signal fps_ftdi : integer range 0 to 99 := 0;
+signal cam_read_en_anterior : STD_LOGIC := '0';
 
 begin
 
@@ -381,5 +401,95 @@ MRST <= Ctrl_reset or btnC;
     end process;
     FT245_RXEn_sync <= synchronizer_RXEn(0);
     FT245_TXEn_sync <= synchronizer_TXEn(0);
+
+
+
+------------------------------------------
+-- CODIGO RELACIONADO HEX - 7 SEGMENTOS
+------------------------------------------
+
+--multiplexor 4 a 1, selecciona uno de los 4 vectores DIGIT_X_HEX. No hay prioridad entre las entradas.
+    with numero_display select
+    DIGIT_SELECTED_HEX <= DIGIT_0_HEX when "00",
+        DIGIT_1_HEX when "01",
+        DIGIT_2_HEX when "10",
+        DIGIT_3_HEX when "11",
+        (others => '0') when others;
+
+-- modulo combinacional: conversor de 4 bits a 7.
+    process (DIGIT_SELECTED_HEX)
+    begin
+        case DIGIT_SELECTED_HEX is
+        when "0000" => CAT_7_BIT_VECTOR <= "1000000"; -- al tener el digito anodo comun, la señal requerida para activar/desactivar el segmento esta invertido.
+        when "0001" => CAT_7_BIT_VECTOR <= "1111001";
+        when "0010" => CAT_7_BIT_VECTOR <= "0100100";
+        when "0011" => CAT_7_BIT_VECTOR <= "0110000";
+        when "0100" => CAT_7_BIT_VECTOR <= "0011001";
+        when "0101" => CAT_7_BIT_VECTOR <= "0010010";
+        when "0110" => CAT_7_BIT_VECTOR <= "0000010";
+        when "0111" => CAT_7_BIT_VECTOR <= "1111000";
+        when "1000" => CAT_7_BIT_VECTOR <= "0000000";
+        when "1001" => CAT_7_BIT_VECTOR <= "0010000";
+        when "1010" => CAT_7_BIT_VECTOR <= "0001000";
+        when "1011" => CAT_7_BIT_VECTOR <= "0000011";
+        when "1100" => CAT_7_BIT_VECTOR <= "1000110";
+        when "1101" => CAT_7_BIT_VECTOR <= "0100001";
+        when "1110" => CAT_7_BIT_VECTOR <= "0000110";
+        when "1111" => CAT_7_BIT_VECTOR <= "0001110";   -- todas las combinaciones posibles estan cubiertas.
+        end case;
+    end process;
+
+-- Contador para multiplexar los cuatro displays. 
+    process (clk, MRST)
+    begin
+        if MRST = '1' then
+            contador_display <= (others => '0');
+        elsif rising_edge(clk) then
+            contador_display <= contador_display + 1;
+        end if;
+    end process;
+    
+-- Seleccion del display mediante los bits superiores.
+    numero_display <= std_logic_vector(contador_display(17 downto 16));
+    
+-- Los anodos de la Basys 3 son activos a nivel bajo.
+    with numero_display select
+        an <= "1110" when "00",
+            "1101" when "01",
+            "1011" when "10",
+            "0111" when "11",
+            "1111" when others;
+
+-- Calcular fps desde el sensor CMOS y hacia el controlador FTDI.
+    process (clk)
+    begin
+        if rising_edge(clk) then
+            vsync_anterior <= CAM_VSYNC_sync;
+            cam_read_en_anterior <= CtrlCAM_read_en;
+            if contador_segundo = 99_999_999 then
+                contador_segundo <= 0;
+                fps_cmos <= contador_frames_cmos; -- FPS desde el sensor CMOS.
+                contador_frames_cmos <= 0;
+                fps_ftdi <= contador_frames_ftdi; -- FPS hacia el dispositivo FTDI.
+                contador_frames_ftdi <= 0;
+            else
+                contador_segundo <= contador_segundo + 1;
+                if CAM_VSYNC_sync = '1' and vsync_anterior = '0' then -- flanco de subida, nuevo frame desde el sensor CMOS.
+                    contador_frames_cmos <= contador_frames_cmos + 1;
+                end if;
+                if CtrlCAM_read_en = '1' and cam_read_en_anterior = '0' then -- flanco de subida, nueva peticion de lectura de un frame desde FTDI.
+                    contador_frames_ftdi <= contador_frames_ftdi + 1;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    DIGIT_0_HEX <= std_logic_vector(to_unsigned(fps_cmos mod 10, 4)); -- Digito menos significativo fps CMOS.
+    DIGIT_1_HEX <= std_logic_vector(to_unsigned(fps_cmos / 10, 4)); -- Decenas fps CMOS.
+    DIGIT_2_HEX <= std_logic_vector(to_unsigned(fps_ftdi mod 10, 4)); -- Digito menos significativo fps FTDI.
+    DIGIT_3_HEX <= std_logic_vector(to_unsigned(fps_ftdi / 10, 4)); -- Decenas fps FTDI.
+
+    seg <= CAT_7_BIT_VECTOR;
+    dp <= '1'; -- activo a nivel bajo.
 
 end Behavioral;
