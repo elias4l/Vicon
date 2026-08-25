@@ -20,9 +20,19 @@ bool ProcesarVideo::cargarClasificadorOjos(const std::string& ruta)
     return clasificadorOjosHaar.load(ruta); // Cargar archivo .xml con el algoritmo de cascada Haar para ojos.
 }
 
+bool ProcesarVideo::cargarRostros(const std::string& carpeta)
+{
+    return reconocimientoRostros.cargarRostros(carpeta, clasificadorCascadaHaar);
+}
+
 void ProcesarVideo::usarCamShift(bool valor) // Establece el indicador privado para usar o no Camshift.
 {
     usarSeguimientoCamShift = valor;
+}
+
+void ProcesarVideo::usarReconocimiento(bool valor)
+{
+    usarReconocimientoRostros = valor;
 }
 
 void ProcesarVideo::iniciarHiloProcesarFrames()
@@ -61,6 +71,7 @@ void ProcesarVideo::detenerHiloProcesarFrames()
     contadorFramesSeguimientoRostro = 0;
     ventanasSeguimiento.clear();
     histogramasGris.clear();
+    nombresSeguimiento.clear();
 }
 
 // Obtiene el frame e indica que hay un nuevo frame por procesar.
@@ -243,6 +254,7 @@ void ProcesarVideo::bucleProcesarFrames()
 
             ventanasSeguimiento.clear(); // Nueva deteccion Haar.
             histogramasGris.clear();
+            nombresSeguimiento.clear();
             int rostrosAceptados = 0; // Rosotros validos, es decir con al menos un ojo.
             for (int i = 0; (i < static_cast<int>(rostros.size())) && (rostrosAceptados < MAX_ROSTROS); i++)
             {
@@ -257,6 +269,12 @@ void ProcesarVideo::bucleProcesarFrames()
                 }
                 rostrosAceptados++;
                 rectangle(frameProcesado, rostroMostrado, Scalar(0, 255, 0), 2); // Mostrar con un recuadro verde el rostro valido.
+                std::string nombreRostro;
+                if (usarReconocimientoRostros) // Nombre reconocido.
+                {
+                    nombreRostro = reconocimientoRostros.reconocerRostro(frameGrisCompleto, rostroMostrado);
+                    putText(frameProcesado, nombreRostro, Point(rostroMostrado.x, std::max(15, rostroMostrado.y - 8)), FONT_HERSHEY_SIMPLEX, 0.6, Scalar(0, 255, 0), 2);
+                }
                 for (int j = 0; j < static_cast<int>(ojos.size()); j++) // Mostrar con recuadros los ojos detectados dentro del rostro.
                 {
                     Rect ojoMostrado(rostroMostrado.x + ojos[j].x, rostroMostrado.y + ojos[j].y, ojos[j].width, ojos[j].height);
@@ -272,6 +290,7 @@ void ProcesarVideo::bucleProcesarFrames()
                     {
                         ventanasSeguimiento.push_back(ventana);
                         histogramasGris.push_back(histograma);
+                        nombresSeguimiento.push_back(nombreRostro);
                     }
                 }
             }
@@ -283,6 +302,7 @@ void ProcesarVideo::bucleProcesarFrames()
         {
             std::vector<Rect> ventanasCamshift;
             std::vector<Mat> histogramasCamshiftGris;
+            std::vector<std::string> nombresCamshift;
 
             for (int i = 0; i < static_cast<int>(ventanasSeguimiento.size()); i++)
             {
@@ -291,13 +311,19 @@ void ProcesarVideo::bucleProcesarFrames()
                 {
                     ventanasCamshift.push_back(ventana);
                     histogramasCamshiftGris.push_back(histogramasGris[i]);
+                    nombresCamshift.push_back(nombresSeguimiento[i]);
                     Rect ventanaMostrada(ventana.x * 2, ventana.y * 2, ventana.width * 2, ventana.height * 2);
                     rectangle(frameProcesado, ventanaMostrada, Scalar(0, 255, 0), 2); // Verde: region seguida mediante CamShift.
+                    if (usarReconocimientoRostros) // Nombre reconocido.
+                    {
+                        putText(frameProcesado, nombresSeguimiento[i], Point(ventanaMostrada.x, std::max(15, ventanaMostrada.y - 8)), FONT_HERSHEY_SIMPLEX, 0.6, Scalar(0, 255, 0), 2);
+                    }
                 }
             }
 
             ventanasSeguimiento = ventanasCamshift;
             histogramasGris = histogramasCamshiftGris;
+            nombresSeguimiento = nombresCamshift;
             seguimientoRostroActivo = !ventanasSeguimiento.empty();
             if (seguimientoRostroActivo)
             {
@@ -315,5 +341,3 @@ void ProcesarVideo::bucleProcesarFrames()
         }
     }
 }
-
-

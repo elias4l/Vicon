@@ -194,6 +194,19 @@
      <string>Reiniciar FPGA</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="checkBoxReconocerRostros">
+    <property name="geometry">
+     <rect>
+      <x>700</x>
+      <y>220</y>
+      <width>91</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Reconocer rostros.</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">

@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <QMessageBox> // Usado al mostrar errores criticos.
 #include <QString>
+#include <QCoreApplication>
 #include <QImage> // Usado para manipular los frames.
 #include <QPixmap> // Usado para mostrar los frames en la interfaz.
 #include <opencv2/core/core.hpp> // Usado para la estructura de OpenCV cv::Mat.
@@ -47,6 +48,7 @@ MainWindow::MainWindow(QWidget *parent)
                 ui.checkBoxVideoColor->setEnabled(true);
                 ui.checkBoxDetectarRostros->setEnabled(true);
                 ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
+                ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             }
             else // Dispositivo conectado, detener video y desconectar.
             {
@@ -63,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent)
                 ui.checkBoxVideoColor->setEnabled(false);
                 ui.checkBoxDetectarRostros->setEnabled(false);
                 ui.checkboxCamshift->setEnabled(false);
+                ui.checkBoxReconocerRostros->setEnabled(false);
                 ui.labelFps->setText("0.0");
             }
         });
@@ -98,6 +101,7 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
             ui.checkBoxVideoColor->setEnabled(true);
             ui.checkBoxDetectarRostros->setEnabled(true);
             ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
+            ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             ui.labelFps->setText("0.0");
         }
         else // Iniciar el video.
@@ -117,7 +121,16 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
                     QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de ojos.");
                     return;
                 }
+                if (reconocerRostros)
+                {
+                    const std::string rutaRostros = (QCoreApplication::applicationDirPath() + "/rostros").toStdString();
+                    if (!hiloProcesadorVideo.cargarRostros(rutaRostros))
+                    {
+                        QMessageBox::warning(this, "Aviso OpenCV.", "No se pudieron cargar las fotografias de reconocimiento.");
+                    }
+                }
                 hiloProcesadorVideo.usarCamShift(seguirRostros);
+                hiloProcesadorVideo.usarReconocimiento(reconocerRostros);
             }
             
             flagVideoActivo = true;
@@ -134,6 +147,7 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
             ui.checkBoxVideoColor->setEnabled(false);
             ui.checkBoxDetectarRostros->setEnabled(false);
             ui.checkboxCamshift->setEnabled(false);
+            ui.checkBoxReconocerRostros->setEnabled(false);
         }
     });
 
@@ -156,9 +170,11 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
         {
             detectarRostros = checked;
             ui.checkboxCamshift->setEnabled(checked && hiloFuenteVideo.dispFTDIConectado() && !flagVideoActivo);
+            ui.checkBoxReconocerRostros->setEnabled(checked && hiloFuenteVideo.dispFTDIConectado() && !flagVideoActivo);
             if (!checked)
             {
                 ui.checkboxCamshift->setChecked(false);
+                ui.checkBoxReconocerRostros->setChecked(false);
             }
         });
 
@@ -170,6 +186,16 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
     connect(ui.checkboxCamshift, &QCheckBox::toggled, this, [this](bool checked)
         {
             seguirRostros = checked;
+        });
+
+// CHECKBOX RECONOCER ROSTROS.
+//===============================================
+    ui.checkBoxReconocerRostros->setChecked(reconocerRostros);
+    ui.checkBoxReconocerRostros->setEnabled(false);
+
+    connect(ui.checkBoxReconocerRostros, &QCheckBox::toggled, this, [this](bool checked)
+        {
+            reconocerRostros = checked;
         });
 
 // TEMPORIZADOR ENCARGADO DE COMPROBAR LA LLEGADA DE FRAMES.
@@ -198,6 +224,7 @@ void MainWindow::capturarUnFrame()
             ui.checkBoxVideoColor->setEnabled(true);
             ui.checkBoxDetectarRostros->setEnabled(true);
             ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
+            ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
             ui.labelFps->setText("0.0");
             QMessageBox::critical(this, "Error de recepcion.", "El hilo FTDI ha dejado de recibir frames");
             return; // No hay frame nuevo disponible, salir de la funcion.
@@ -228,6 +255,7 @@ void MainWindow::capturarUnFrame()
         ui.checkBoxVideoColor->setEnabled(true);
         ui.checkBoxDetectarRostros->setEnabled(true);
         ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
+        ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
         ui.labelFps->setText("0.0");
         QMessageBox::critical(this, "Error de imagen.", "No se pudo convertir el frame recibido a RGB.");
         return;
@@ -423,6 +451,4 @@ void MainWindow::actualizarDispositivosFTDI()
 
 MainWindow::~MainWindow()
 {}
-
-
 

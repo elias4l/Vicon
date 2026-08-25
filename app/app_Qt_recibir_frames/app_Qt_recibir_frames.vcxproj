@@ -112,6 +112,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="reconocimientorostros.cpp" />
     <ClCompile Include="procesarvideo.cpp" />
     <QtRcc Include="mainwindow.qrc" />
     <QtUic Include="mainwindow.ui" />
@@ -121,6 +122,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="reconocimientorostros.h" />
     <ClInclude Include="fuentevideo.h" />
     <ClInclude Include="procesarvideo.h" />
   </ItemGroup>

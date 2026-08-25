@@ -27,6 +27,7 @@ private:
     bool videoColor = false; // Indica si se ha seleccionado video a color.
     bool detectarRostros = false; // Indica si se ha seleccionado la deteccion de rostros con OpenCV.
     bool seguirRostros = false; // Indica si se ha seleccionado el seguimiento de rostros con CamShift.
+    bool reconocerRostros = false; // Indica si se ha seleccionado el reconocimiento de rostros.
     QTimer temporizadorSigFrame; // Temporizador sigle-shot para indicar cuando comprobar el siguiente frame.
     QElapsedTimer temporizadorFps; // Mide el tiempo para calcular los fps.
     int contFramesRecibidos = 0; // En un segundo.
@@ -41,5 +42,4 @@ private:
     int limitarColor(int valor); // Recorta a un valor entre 0 y 255.
     void actualizarDispositivosFTDI(); // Actualiza los dispositivos FTDI disponibles en el ComboBox.
 };
-
 
