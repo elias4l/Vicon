@@ -36,7 +36,7 @@ bool FuenteVideo::conectarFTDI(int indiceDispositivo)
 
     if (ftStatus == FT_OK)
     {
-        ftStatus = FT_SetLatencyTimer(ftHandle, 4); // Setear la latencia maxima a 4 ms.
+        ftStatus = FT_SetLatencyTimer(ftHandle, 1); // Setear la latencia maxima a 1 ms.
     }
 
     if (ftStatus == FT_OK)
@@ -81,11 +81,7 @@ bool FuenteVideo::recibirFrame(bool color, std::vector<unsigned char>& frame) //
     const DWORD frameBytes = color ? 640u * 480u * 2u : 640u * 480u; // Tamano del frame en bytes, para color 614400 bytes, para BN 307200 bytes.
 
     frame.resize(frameBytes); // Redimensionar el vector de bytes del frame segun el color seleccionado.
-    FT_STATUS ftStatus = FT_Purge(ftHandle, FT_PURGE_RX | FT_PURGE_TX); // Limpiar colas de datos previos en lectura y escritura.
-    if (ftStatus != FT_OK)
-    {
-        return false;
-    }
+    FT_STATUS ftStatus;
 
     unsigned char comando = CMD_LEER_FRAME; // La FPGA comprueba el BIT0 para decidir si debe escribir un frame.
     if (color)
