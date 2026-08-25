@@ -227,6 +227,8 @@ void ProcesarVideo::bucleProcesarFrames()
             frameGris = frame.clone();
         }
         equalizeHist(frameGris, frameGris); // Mejorar el contraste antes de aplicar Haar y CamShift.
+        Mat frameGrisCompleto = frameGris;
+        resize(frameGris, frameGris, Size(320, 240)); // Procesar a mitad de resolucion para reducir el coste de la deteccion.
 
         if (!usarSeguimientoCamShift || !seguimientoRostroActivo || contadorFramesSeguimientoRostro >= FRAMES_CAMSHIFT) // Haar se ejecuta en cada frame sin CamShift, al perder el seguimiento, o tras 10 frames con seguimiento.
         {
@@ -245,7 +247,8 @@ void ProcesarVideo::bucleProcesarFrames()
             for (int i = 0; (i < static_cast<int>(rostros.size())) && (rostrosAceptados < MAX_ROSTROS); i++)
             {
                 // Detectar ojos en cada rostro detectado.
-                Mat rostroRoi = frameGris(rostros[i]);
+                Rect rostroMostrado(rostros[i].x * 2, rostros[i].y * 2, rostros[i].width * 2, rostros[i].height * 2);
+                Mat rostroRoi = frameGrisCompleto(rostroMostrado);
                 std::vector<Rect> ojos;    // Vector de los ojos descubiertos
                 clasificadorOjosHaar.detectMultiScale(rostroRoi, ojos, 1.1, 2, 0, Size(3, 3)); // Ahora se usa el clasificador de los ojos.
                 if (ojos.empty()) // Rostro no valido.
@@ -253,11 +256,11 @@ void ProcesarVideo::bucleProcesarFrames()
                     continue;
                 }
                 rostrosAceptados++;
-                rectangle(frameProcesado, rostros[i], Scalar(0, 255, 0), 2); // Mostrar con un recuadro verde el rostro valido.
+                rectangle(frameProcesado, rostroMostrado, Scalar(0, 255, 0), 2); // Mostrar con un recuadro verde el rostro valido.
                 for (int j = 0; j < static_cast<int>(ojos.size()); j++) // Mostrar con recuadros los ojos detectados dentro del rostro.
                 {
-                    Rect ojo_j(rostros[i].x + ojos[j].x, rostros[i].y + ojos[j].y, ojos[j].width, ojos[j].height);
-                    rectangle(frameProcesado, ojo_j, Scalar(0, 255, 0), 2);
+                    Rect ojoMostrado(rostroMostrado.x + ojos[j].x, rostroMostrado.y + ojos[j].y, ojos[j].width, ojos[j].height);
+                    rectangle(frameProcesado, ojoMostrado, Scalar(0, 255, 0), 2);
                 }
 
                 // Inicializar CamShift para cada rostro que contiene al menos un ojo, hasta un maximo de cuatro rostros.
@@ -288,7 +291,8 @@ void ProcesarVideo::bucleProcesarFrames()
                 {
                     ventanasCamshift.push_back(ventana);
                     histogramasCamshiftGris.push_back(histogramasGris[i]);
-                    rectangle(frameProcesado, ventana, Scalar(0, 255, 0), 2); // Verde: region seguida mediante CamShift.
+                    Rect ventanaMostrada(ventana.x * 2, ventana.y * 2, ventana.width * 2, ventana.height * 2);
+                    rectangle(frameProcesado, ventanaMostrada, Scalar(0, 255, 0), 2); // Verde: region seguida mediante CamShift.
                 }
             }
 
