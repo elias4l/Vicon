@@ -213,28 +213,32 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
 void MainWindow::capturarUnFrame()
 {
     std::vector<unsigned char> frame; // Buffer local temporal para almacenar el frame recibido.
-    if (!hiloFuenteVideo.obtenerUltimoFrame(frame)) // Obtniene el ultimo frame recibido desde el dispositivo FTDI.
+    if (!hiloFuenteVideo.obtenerUltimoFrame(frame)) // Obtniene el ultimo frame recibido desde el dispositivo FTDI. Si no hay frame, ejecuta if.
     {
-        if(!hiloFuenteVideo.recepcionActiva()) // Si el hilo de recepcion se detuvo por algun error, detener el video mostrado e indicar error.
+        if(!hiloFuenteVideo.recepcionActiva()) // Si el hilo de recepcion se indico detener, se detiene el video mostrado e indicar error.
         {
-            flagVideoActivo = false;
-            hiloFuenteVideo.detenerHiloFuenteVideo(); // Detener el bucle de recepcion y cerrar el hilo.
-            hiloProcesadorVideo.detenerHiloProcesarFrames(); // Cierra el hilo de procesar frames usando OpenCV.
-            ui.buttonVideo->setText("Iniciar video");
-            ui.checkBoxVideoColor->setEnabled(true);
-            ui.checkBoxDetectarRostros->setEnabled(true);
-            ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
-            ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
+            flagVideoActivo = false; // Indicar video no mostrandose.
+            hiloFuenteVideo.detenerHiloFuenteVideo(); // Detener el bucle principal de recepcion de frames y cerrar el hilo.
+            hiloProcesadorVideo.detenerHiloProcesarFrames(); // Cierra el hilo de procesar frames con OpenCV.
+            ui.buttonConectar->setText("Conectar"); // Habilitar de nuevo los interfaces del panel para conectar al dispositivo FTDI.
+            ui.comboDispositivos->setEnabled(true);
+            ui.buttonActualizarDisp->setEnabled(true);
+            ui.labelVideo->setText("Sin señal de video."); // No se muestran frames.
+            ui.buttonVideo->setText("Iniciar video"); // Deshabilitar los interfaces del panel de usuario sobre el video y las tareas de procesamiento.
+            ui.buttonVideo->setEnabled(false);
+            ui.checkBoxVideoColor->setEnabled(false);
+            ui.checkBoxDetectarRostros->setEnabled(false);
+            ui.checkboxCamshift->setEnabled(false);
+            ui.checkBoxReconocerRostros->setEnabled(false);
             ui.labelFps->setText("0.0");
             QMessageBox::critical(this, "Error de recepcion.", "El hilo FTDI ha dejado de recibir frames");
             return; // No hay frame nuevo disponible, salir de la funcion.
         }
-        temporizadorSigFrame.start(10); // El hilo sigue activo, pero no hay frame nuevo disponible, volver a comprobar en 10 ms.
+        temporizadorSigFrame.start(10); // El hilo sigue indicado como activo, pero no hay frame nuevo disponible, volver a comprobar en 10 ms.
         return;
     }
-    
+    // Frame obtenido, ahora queda representarlo segun la configuracion del panel de usuario.
     QImage imagen; // Objeto imagen en Qt.
-
     if (videoColor)
     {
         imagen = convertirFrameColor(frame); // Frame desde FTDI tiene formato YCbCr 4:2:2.
@@ -244,7 +248,6 @@ void MainWindow::capturarUnFrame()
         imagen = convertirFrameBN(frame); // Frame desde FTDI en escala de grises o luminancia Y.
     }
     
-
     if (imagen.isNull()) // Imagen recibida invalida, detener video.
     {
         flagVideoActivo = false;
@@ -257,7 +260,7 @@ void MainWindow::capturarUnFrame()
         ui.checkboxCamshift->setEnabled(ui.checkBoxDetectarRostros->isChecked());
         ui.checkBoxReconocerRostros->setEnabled(ui.checkBoxDetectarRostros->isChecked());
         ui.labelFps->setText("0.0");
-        QMessageBox::critical(this, "Error de imagen.", "No se pudo convertir el frame recibido a RGB.");
+        QMessageBox::critical(this, "Error de imagen recibida.", "No se pudo convertir el frame recibido a RGB.");
         return;
     }
 
@@ -451,4 +454,3 @@ void MainWindow::actualizarDispositivosFTDI()
 
 MainWindow::~MainWindow()
 {}
-

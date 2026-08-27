@@ -169,6 +169,9 @@ signal vsync_anterior : STD_LOGIC := '0'; -- detecta el flanco de subida de CAM_
 signal contador_frames_ftdi : integer range 0 to 99 := 0;
 signal fps_ftdi : integer range 0 to 99 := 0;
 signal cam_read_en_anterior : STD_LOGIC := '0';
+-- senales para indicar el uso del sensor CMOS y dispositivo FTDI en LED15 y LED0
+signal contador_parpadeo_cmos : unsigned(3 downto 0) := (others => '0'); -- Se estiman 15 FPS, asi se crea una senal aproximadamente simetrica.
+signal contador_parpadeo_ftdi : unsigned(3 downto 0) := (others => '0');
 
 begin
 
@@ -300,23 +303,16 @@ MRST <= Ctrl_reset or btnC;
     CAM_read_color <= CtrlCAM_read_color;
 
 
--- TEST borrar
-    LED(7 downto 0) <= UserDataOut;
-    --LED(0) <= FT245_RXEn;
-    --LED(1) <= FT245_RXEn_sync;
-    --LED(2) <= User_en;
-    --LED(3) <= FT245_RDn;
-    --LED(4) <= enable_tick;
+-- DEBUG
+--    LED(4) <= CAM_CLK2; -- CAM_XCLK
+--    LED(5) <= CAM_PCLK;
+--    LED(6) <= CAM_HSYNC;
+--    LED(7) <= CAM_VSYNC;
 
-    LED(8) <= CAM_CLK2; -- CAM_XCLK
-    LED(9) <= CAM_PCLK;
-    LED(10) <= CAM_HSYNC;
-    LED(11) <= CAM_VSYNC;
-
-    LED(12) <= FIFO_PUSH;
-    LED(13) <= FIFO_FULL;
-    LED(14) <= FIFO_EMPTY;
-    LED(15) <= FIFO_FULL;
+--    LED(9) <= FIFO_PUSH;
+--    LED(10) <= FIFO_POP;
+--    LED(11) <= FIFO_EMPTY;
+--    LED(12) <= FIFO_FULL;
     
 ------------------------------------------
 -- CODIGO RELACIONADO CON LA FIFO BRAM
@@ -476,9 +472,11 @@ MRST <= Ctrl_reset or btnC;
                 contador_segundo <= contador_segundo + 1;
                 if CAM_VSYNC_sync = '1' and vsync_anterior = '0' then -- flanco de subida, nuevo frame desde el sensor CMOS.
                     contador_frames_cmos <= contador_frames_cmos + 1;
+                    contador_parpadeo_cmos <= contador_parpadeo_cmos + 1;
                 end if;
                 if CtrlCAM_read_en = '1' and cam_read_en_anterior = '0' then -- flanco de subida, nueva peticion de lectura de un frame desde FTDI.
                     contador_frames_ftdi <= contador_frames_ftdi + 1;
+                    contador_parpadeo_ftdi <= contador_parpadeo_ftdi + 1;
                 end if;
             end if;
         end if;
@@ -491,5 +489,8 @@ MRST <= Ctrl_reset or btnC;
 
     seg <= CAT_7_BIT_VECTOR;
     dp <= '1'; -- activo a nivel bajo.
+
+    LED(15) <= not contador_parpadeo_cmos(3); -- A unos 15fps, la frecuencia de parpadeo es 15/16, 1Hz aproximadamente.
+    LED(0) <= not contador_parpadeo_ftdi(3);
 
 end Behavioral;

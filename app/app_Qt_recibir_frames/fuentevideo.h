@@ -23,6 +23,7 @@ public:
 
 private:
     FT_HANDLE ftHandle = nullptr; // Puntero del handler del dispositivo FTDI.
+    int indiceDispositivo = -1; // El sistema intenta reconfigurarse ante algun error.
     
     std::thread hiloFuenteVideo;
     std::atomic<bool> flagRecepcionActiva{ false }; // Flag del bucle de recepcion de frames. Atomico al compartirse entre hilos.
