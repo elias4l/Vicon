@@ -112,6 +112,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="logs.cpp" />
     <ClCompile Include="reconocimientorostros.cpp" />
     <ClCompile Include="procesarvideo.cpp" />
     <QtRcc Include="mainwindow.qrc" />
@@ -122,6 +123,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="logs.h" />
     <ClInclude Include="reconocimientorostros.h" />
     <ClInclude Include="fuentevideo.h" />
     <ClInclude Include="procesarvideo.h" />

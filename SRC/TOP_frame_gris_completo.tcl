@@ -66,7 +66,7 @@ add_force {/TOP/JC(4)} -radix bin {1 0ns} ;# TXEn
 run 100 ns
 
 #############################################################################
-# TEST. RECEPCION COMANDO DESDE EL FTDI. FRAME A COLOR.
+# TEST. RECEPCION COMANDO DESDE EL FTDI. FRAME EN BN.
 #############################################################################
 
 # FTDI tiene un comando disponible, baja RXEn.
@@ -76,7 +76,7 @@ add_force {/TOP/JC(4)} -radix bin {0 0ns}
 
 # RDn baja a los 65ns y sube a los 95ns. Se coloca el comando 01 en el bus de datos del FTDI con un margen de 10ns (min 1ns, max 14ns).
 # Para este valor la permutacion de los pines de JB no cambia el resultado.
-add_force {/TOP/JB} -radix hex {00 0ns} {11 75ns} {00 105ns} ;# Equivale al comando x03 en recepcion de la FPGA.
+add_force {/TOP/JB} -radix hex {00 0ns} {01 75ns} {00 105ns}
 # FTDI sube RXEn 10ns (min 1ns, max 14ns) tras subir RDn. Ya no vuelve a indicar dato disponible para leer.
 add_force {/TOP/JC(0)} -radix bin {0 0ns} {1 105ns}
 run 120 ns
@@ -96,87 +96,92 @@ run 80ns
 # LLega desde el sensor un nuevo frame. 
 add_force {/TOP/JA(6)} -radix bin {1 0ns} ;# CAM_VSYNC activo 6 ciclos PCLK, cada uno de 80ns.
 run 480 ns
-# Se activa HSYNC y con ello los bytes utiles del sensor CMOS.
-# Los datos tienen formato Cb Y0 Cr Y1 Cb Y2 Cr Y3.
-# En color deben guardarse los 8 pixeles correctamente y en orden.
-add_force {/TOP/JA(2)} -radix bin {1 0ns} ;# CAM_HSYNC
-add_force {/TOP/CAM_Data} -radix hex {C1 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {11 0ns} ;# Y0
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C2 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {22 0ns} ;# Y1
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C3 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {33 0ns} ;# Y2
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C4 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {44 0ns} ;# Y3
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C5 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {55 0ns} ;# Y4
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C6 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {66 0ns} ;# Y5
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C7 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {77 0ns} ;# Y6
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C8 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {88 0ns} ;# Y7
-run 80 ns
+# 479 lineas iguales.
+for {set linea 0} {$linea < 479} {incr linea} {
+    add_force {/TOP/JA(2)} -radix bin {1 0ns}
+    # 8 pixeles repetidos hasta completar los 640. (80 veces patron de 16 bytes).
+    for {set patron 0} {$patron < 80} {incr patron} {
+        add_force {/TOP/CAM_Data} -radix hex {C1 0ns} ;# Cb
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {11 0ns} ;# Y0
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C2 0ns} ;# Cr
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {22 0ns} ;# Y1
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C3 0ns} ;# Cb
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {33 0ns} ;# Y2
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C4 0ns} ;# Cr
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {44 0ns} ;# Y3
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C5 0ns} ;# Cb
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {55 0ns} ;# Y0
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C6 0ns} ;# Cr
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {66 0ns} ;# Y1
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C7 0ns} ;# Cb
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {77 0ns} ;# Y2
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {C8 0ns} ;# Cr
+        run 80 ns
+        add_force {/TOP/CAM_Data} -radix hex {88 0ns} ;# Y3
+        run 80 ns
+    }
+    # Blanking horizontal tras cada linea, unos 318 ciclos PCLK.
+    add_force {/TOP/JA(2)} -radix bin {0 0ns}
+    add_force {/TOP/CAM_Data} -radix hex {00 0ns}
+    run 25440 ns
+}
+# Ultima linea
+add_force {/TOP/JA(2)} -radix bin {1 0ns}
+# 8 pixeles repetidos hasta completar los 640. (80 veces patron de 16 bytes).
+for {set patron 0} {$patron < 80} {incr patron} {
+    add_force {/TOP/CAM_Data} -radix hex {C1 0ns} ;# Cb
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {11 0ns} ;# Y0
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C2 0ns} ;# Cr
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {22 0ns} ;# Y1
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C3 0ns} ;# Cb
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {33 0ns} ;# Y2
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C4 0ns} ;# Cr
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {44 0ns} ;# Y3
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C5 0ns} ;# Cb
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {55 0ns} ;# Y0
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C6 0ns} ;# Cr
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {66 0ns} ;# Y1
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C7 0ns} ;# Cb
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {77 0ns} ;# Y2
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {C8 0ns} ;# Cr
+    run 80 ns
+    add_force {/TOP/CAM_Data} -radix hex {88 0ns} ;# Y3
+    run 80 ns
+}
 
-# Blanking entre la primera y la segunda linea.
-add_force {/TOP/JA(2)} -radix bin {0 0ns} ;# CAM_HSYNC
-add_force {/TOP/CAM_Data} -radix hex {FF 0ns} ;# Deben descartarse.
-run 320 ns
-
-# Comienza la segunda linea.
-add_force {/TOP/JA(2)} -radix bin {1 0ns} ;# CAM_HSYNC
-add_force {/TOP/CAM_Data} -radix hex {C1 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {11 0ns} ;# Y0
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C2 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {22 0ns} ;# Y1
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C3 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {33 0ns} ;# Y2
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C4 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {44 0ns} ;# Y3
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C5 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {55 0ns} ;# Y4
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C6 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {66 0ns} ;# Y5
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C7 0ns} ;# Cb
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {77 0ns} ;# Y6
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {C8 0ns} ;# Cr
-run 80 ns
-add_force {/TOP/CAM_Data} -radix hex {88 0ns} ;# Y7
-run 80 ns
-
-# Tras la segunda y ultima linea, primero baja HSYNC 6 ciclos de PCLK.
+# Tras la ultima linea, primero baja HSYNC 6 ciclos de PCLK.
 add_force {/TOP/JA(2)} -radix bin {0 0ns} ;# CAM_HSYNC
 add_force {/TOP/CAM_Data} -radix hex {00 0ns}
 run 480 ns
+
 # Termina el frame bajando VSYNC.
 add_force {/TOP/JA(6)} -radix bin {0 0ns} ;# CAM_VSYNC
 # LA FIFO deba vaciarse complemtamente.

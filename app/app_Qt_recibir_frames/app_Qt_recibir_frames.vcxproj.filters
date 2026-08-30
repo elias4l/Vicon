@@ -37,6 +37,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="logs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="reconocimientorostros.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -51,6 +54,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="logs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="reconocimientorostros.h">
       <Filter>Header Files</Filter>
     </ClInclude>

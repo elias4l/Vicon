@@ -1,4 +1,5 @@
 #include "procesarvideo.h"
+#include "logs.h"
 #include <opencv2/imgproc/imgproc.hpp> // Usado en cvtColr(), calcHist(), rectangle() ..
 #include <opencv2/video/tracking.hpp> // Usado con el algoritmo Camshift.
 #include <vector> // Almacenar los rostros, ventanas para Camshift, ..
@@ -274,6 +275,7 @@ void ProcesarVideo::bucleProcesarFrames()
                 {
                     nombreRostro = reconocimientoRostros.reconocerRostro(frameGrisCompleto, rostroMostrado);
                     putText(frameProcesado, nombreRostro, Point(rostroMostrado.x, std::max(15, rostroMostrado.y - 8)), FONT_HERSHEY_SIMPLEX, 0.6, Scalar(0, 255, 0), 2);
+                    escribirLog("VISION cara=" + std::to_string(rostrosAceptados) + " nombre=" + nombreRostro + " ojos=" + std::to_string(ojos.size()) + " x=" + std::to_string(rostroMostrado.x) + " y=" + std::to_string(rostroMostrado.y) + " ancho=" + std::to_string(rostroMostrado.width) + " alto=" + std::to_string(rostroMostrado.height));
                 }
                 for (int j = 0; j < static_cast<int>(ojos.size()); j++) // Mostrar con recuadros los ojos detectados dentro del rostro.
                 {
