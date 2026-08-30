@@ -117,7 +117,7 @@ begin
         
     
 --  Proceso para modelar la lógica de estado siguiente. 
-    COMB: process (state_reg, CAM_pclk_tick, FIFO_PUSH, FIFO_EMPTY, FTDI_IF_ready, FTDI_IF_RXEn, FTDI_IF_TXEn, FTDI_IF_DOUT)
+    COMB: process (state_reg, reset_out_reg, CAM_read_reset_reg, CAM_read_en_reg, CAM_read_color_reg, CAM_pclk_tick, FIFO_reset_reg, FIFO_POP_reg, FIFO_PUSH, FIFO_EMPTY, FTDI_IF_en_reg, FTDI_IF_wrn_rd_reg, FTDI_IF_ready, FTDI_IF_RXEn, FTDI_IF_TXEn, FTDI_IF_DOUT)
     begin
     --EC34. Asignación por defecto: simplifica el código y evita LATCHES no deseados.
     state_next <= state_reg;
@@ -191,12 +191,11 @@ begin
                 state_next <= TX_fifo_pop;
             end if;
 
-        when TX_fifo_pop => -- al entrar se tiene que FIFO_POP_reg = '1', por lo que primero siempre durante minimo un ciclo activa la salida FIFO_POP.
-            if (FIFO_POP_reg = '1') and (FIFO_PUSH = '0') then
+        when TX_fifo_pop =>
+            FIFO_POP_next <= '1'; -- Se entra con FIFO_POP_next = 0, por lo que se asegura al menos un ciclo con POP alto.
+            if (FIFO_POP_reg = '1') and (FIFO_PUSH = '0') then -- solo si PUSH baja, se sale pues ya se ha registrado POP.
                 FIFO_POP_next <= '0';
-                state_next <= TX_enable; -- si hay mas bytes en la FIFO.
-            else
-                FIFO_POP_next <= '1';
+                state_next <= TX_enable;
             end if;
 
     end case;

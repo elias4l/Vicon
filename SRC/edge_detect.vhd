@@ -25,6 +25,6 @@ begin
     end process;
 
     -- lógica de detección de flanco de subida
-    tick <= (not delay_reg) and level;
+    tick <= (not delay_reg) and level and (not reset);
 
 end gate_level_arch;

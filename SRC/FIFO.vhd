@@ -18,7 +18,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity FIFO is
 --EC32. El interfaz del módulo FIFO debe incluir los genéricos B y W.
   generic (
-    B : integer := 17;   -- anchura de bus de direcciones de la RAM interna. 2^15 = 32768 bytes = 32 KB. 2^17 = 128 KB.
+    B : integer := 17;   -- anchura de bus de direcciones de la RAM interna. Minimo escala de grises: 2^7 = 128 bytes. Minimo a color: 2^16 = 65.536 bytes = 64KB. Maximo permitido en la Basys3: 2^17 = 131.072 bytes = 128KB.
     W : integer := 8);  -- anchura de los buses de datos (DIN y DOUT).
         Port (
             CLK   : in std_logic;
@@ -68,13 +68,13 @@ begin
             if (RST = '1') then --EC32. ambos contadores deben ponerse a 0, de manera SÍNCRONA, cuando se activa la entrada RST.
                 wr_ptr <= (others => '0');
                 rd_ptr <= (others => '0');
-            elsif wr_en = '1' and PUSH = '1' then --EC32. el puntero de escritura se incrementa solo cuando se activa la habilitación de escritura.
+            elsif wr_en = '1' and PUSH = '1' then --EC32. El puntero de escritura se incrementa solo cuando se activa la habilitación de escritura.
                 if wr_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then -- tamaño del bus de direcciones es B.
                     wr_ptr <= (others => '0');  -- memoria RAM circular.
                 else
                     wr_ptr <= std_logic_vector(unsigned(wr_ptr) + 1);
                 end if;
-            elsif rd_en = '1' and POP = '1' then --EC32. el puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
+            elsif rd_en = '1' and POP = '1' then --EC32. El puntero de lectura se incrementa solo cuando se activa la habilitación de lectura.
                 if rd_ptr = std_logic_vector(to_unsigned(2**B-1, B)) then
                     rd_ptr <= (others => '0');
                 else

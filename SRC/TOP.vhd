@@ -73,8 +73,6 @@ alias CAM_D7: STD_LOGIC is JA(5);
 alias CAM_VSYNC: STD_LOGIC is JA(6);
 alias CAM_SCL: STD_LOGIC is JA(7);
 
-signal  CAM_PCLK_edge  : STD_LOGIC;
-
 --aliases puerto JXADC
 alias CAM_cable: STD_LOGIC is JXADC(0); --reset del sensor CMOS
 alias CAM_D0: STD_LOGIC is JXADC(1);
@@ -431,7 +429,8 @@ MRST <= Ctrl_reset or btnC;
         when "1100" => CAT_7_BIT_VECTOR <= "1000110";
         when "1101" => CAT_7_BIT_VECTOR <= "0100001";
         when "1110" => CAT_7_BIT_VECTOR <= "0000110";
-        when "1111" => CAT_7_BIT_VECTOR <= "0001110";   -- todas las combinaciones posibles estan cubiertas.
+        when "1111" => CAT_7_BIT_VECTOR <= "0001110";
+        when others => CAT_7_BIT_VECTOR <= "1111111";   -- todas las combinaciones posibles estan cubiertas.
         end case;
     end process;
 
