@@ -20,7 +20,7 @@ bool ReconocimientoRostros::cargarRostros(const std::string& carpeta, cv::Cascad
         return true; // No volver a entrenar.
 
     std::vector<cv::String> archivosCargados;
-    cv::glob(carpeta + "/*.png", archivosCargados, false);
+    cv::glob(carpeta + "/*.png", archivosCargados, true);
 
     if (archivosCargados.empty()) // No hay rostros de referencia en la carpeta.
         return false;
@@ -62,20 +62,17 @@ bool ReconocimientoRostros::cargarRostros(const std::string& carpeta, cv::Cascad
         size_t posicionBarra = ruta.find_last_of("/\\");
         std::string nombre; // El nombre de la carpeta es el nombre del individuo.
 
-        if (posicionBarra == std::string::npos)
-            nombre = ruta;
+        if (posicionBarra == std::string::npos) // No esta dentro de una carpeta con su nombre, se ignora.
+        {
+            continue;
+        }
         else
-            nombre = ruta.substr(posicionBarra + 1);
-        
-        size_t posicionPunto = nombre.find_last_of('.'); // Quitar .png
+        {
+            std::string carpetaRostro = ruta.substr(0, posicionBarra); // Ruta del directorio donde se encuentra el archivo png.
+            size_t posicionCarpeta = carpetaRostro.find_last_of("/\\"); // Directorio superior al anterior.
+            nombre = carpetaRostro.substr(posicionCarpeta + 1); // Nombre de la carpeta con los rostros, que es el nombre del individuo a mostrar.
 
-        if (posicionPunto != std::string::npos)
-            nombre = nombre.substr(0, posicionPunto);
-
-
-        size_t posicionGuion = nombre.find_last_of('_'); // Quitar _x del nombre.
-        if (posicionGuion != std::string::npos)
-            nombre = nombre.substr(0, posicionGuion);
+        }
 
         if (nombre.empty())
             continue;

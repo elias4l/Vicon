@@ -108,14 +108,14 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
         {
             if (detectarRostros)
             {
-                const std::string rutaDetector = "C:/opencv-4.14.0/opencv/sources/data/haarcascades/haarcascade_frontalface_alt2.xml";
+                const std::string rutaDetector = (QCoreApplication::applicationDirPath() + "/clasificadores/haarcascade_frontalface_alt2.xml").toStdString();
                 if(!hiloProcesadorVideo.cargarClasificadorHaar(rutaDetector))
                 {
                     QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de rostros.");
                     return;
                 }
 
-                const std::string rutaDetectorOjos = "C:/opencv-4.14.0/opencv/sources/data/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
+                const std::string rutaDetectorOjos = (QCoreApplication::applicationDirPath() + "/clasificadores/haarcascade_eye_tree_eyeglasses.xml").toStdString();
                 if(!hiloProcesadorVideo.cargarClasificadorOjos(rutaDetectorOjos))
                 {
                     QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de ojos.");
