@@ -35,10 +35,12 @@ MainWindow::MainWindow(QWidget *parent)
                 int dispositivo_i = ui.comboDispositivos->currentData().toInt(); // Tomar el dispositivo seleccionado en el ComboBox.
                 if (hiloFuenteVideo.conectarFTDI(dispositivo_i) == false)
                 {
+                    actualizarLedEstado(false);
                     QMessageBox::critical(this, "Error FTDI.", "No se pudo abrir o configurar el dispositivo FTDI.");
                     return;
                 }
 
+                actualizarLedEstado(true);
                 ui.buttonConectar->setText("Desconectar");
                 ui.comboDispositivos->setEnabled(false);
                 ui.buttonActualizarDisp->setEnabled(false);
@@ -56,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
                 temporizadorSigFrame.stop(); // Detiene la comprobacion de nuevos frames.
                 hiloFuenteVideo.desconectarFTDI(); // Desconecta la comunicacion con el dispositivo FTDI.
                 hiloProcesadorVideo.detenerHiloProcesarFrames(); // Detiene el hilo de procesado con OpenCV.
+                actualizarLedEstado(false);
 
                 ui.buttonConectar->setText("Conectar");
                 ui.comboDispositivos->setEnabled(true);
@@ -79,7 +82,12 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
 
         if (!hiloFuenteVideo.enviarComando(comandoFPGA))
         {
+            actualizarLedEstado(false);
             QMessageBox::critical(this, "Error FTDI.", "No se pudo reiniciar la FPGA.");
+        }
+        else
+        {
+            actualizarLedEstado(true);
         }
     }
 );
@@ -111,6 +119,7 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
                 const std::string rutaDetector = (QCoreApplication::applicationDirPath() + "/clasificadores/haarcascade_frontalface_alt2.xml").toStdString();
                 if(!hiloProcesadorVideo.cargarClasificadorHaar(rutaDetector))
                 {
+                    actualizarLedEstado(false);
                     QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de rostros.");
                     return;
                 }
@@ -118,6 +127,7 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
                 const std::string rutaDetectorOjos = (QCoreApplication::applicationDirPath() + "/clasificadores/haarcascade_eye_tree_eyeglasses.xml").toStdString();
                 if(!hiloProcesadorVideo.cargarClasificadorOjos(rutaDetectorOjos))
                 {
+                    actualizarLedEstado(false);
                     QMessageBox::critical(this, "Error OpenCV.", "No se pudo cargar el detector de ojos.");
                     return;
                 }
@@ -142,6 +152,7 @@ connect(ui.buttonReiniciarFPGA, &QPushButton::clicked, this, [this]()
             temporizadorFps.start();
             contFramesRecibidos = 0;
             temporizadorSigFrame.start(10); // Solicitar el primer frame. Qt comprueba cada 10 ms si hay un frame nuevo disponible.
+            actualizarLedEstado(true);
 
             ui.buttonVideo->setText("Detener video");
             ui.checkBoxVideoColor->setEnabled(false);
@@ -217,6 +228,7 @@ void MainWindow::capturarUnFrame()
     {
         if(!hiloFuenteVideo.recepcionActiva()) // Si el hilo de recepcion se indico detener, se detiene el video mostrado e indicar error.
         {
+            actualizarLedEstado(false);
             flagVideoActivo = false; // Indicar video no mostrandose.
             hiloFuenteVideo.detenerHiloFuenteVideo(); // Detener el bucle principal de recepcion de frames y cerrar el hilo.
             hiloProcesadorVideo.detenerHiloProcesarFrames(); // Cierra el hilo de procesar frames con OpenCV.
@@ -250,6 +262,7 @@ void MainWindow::capturarUnFrame()
     
     if (imagen.isNull()) // Imagen recibida invalida, detener video.
     {
+        actualizarLedEstado(false);
         flagVideoActivo = false;
         temporizadorSigFrame.stop();
         hiloFuenteVideo.detenerHiloFuenteVideo();
@@ -418,6 +431,7 @@ void MainWindow::actualizarDispositivosFTDI()
 
     if (ftStatus != FT_OK)
     {
+        actualizarLedEstado(false);
         QMessageBox::critical(this, "Error FTDI", "Error obteniendo la lista de dispositivos.");
         ui.buttonConectar->setEnabled(false);
         return;
@@ -449,6 +463,18 @@ void MainWindow::actualizarDispositivosFTDI()
     else
     {
         ui.buttonConectar->setEnabled(true);
+    }
+}
+
+void MainWindow::actualizarLedEstado(bool estado)
+{
+    if (estado)
+    {
+        ui.labelEstado->setStyleSheet("background-color: rgb(0, 255, 0); border-radius: 15px;");
+    }
+    else
+    {
+        ui.labelEstado->setStyleSheet("background-color: rgb(255, 0, 0); border-radius: 15px;");
     }
 }
 

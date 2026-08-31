@@ -29,6 +29,9 @@ public:
     bool obtenerUltimoFrameProcesado(Mat& frame); // Usado por MainWindows para obtener el frame procesado.
 
 private:
+    const int FRAMES_CAMSHIFT = 10; // Numero de frames que camshift rastrea antes de volver a detectar rostros de nuevo.
+    const int MAX_ROSTROS = 4; // Numero maximo de rostros seguidos simultaneamente.
+
     void bucleProcesarFrames(); // Bucle principal del hilo.
     bool iniciarSeguimientoRostro(const Mat& frame, const Rect& region, Rect& ventana, Mat& histograma); // Inicializa el histograma para luego actualizar la posicion del rostro detectado.
     bool actualizarSeguimientoRostro(const Mat& frame, Rect& ventana, const Mat& histograma); // Modifica la posicion del rostro detectado.
@@ -42,13 +45,11 @@ private:
     std::vector<std::string> nombresSeguimiento; // Nombre asociado a cada ventana CamShift.
     bool seguimientoRostroActivo = false; // Indica si Camshift esta rastreando un rostro.
     int contadorFramesSeguimientoRostro = 0;
-    const int FRAMES_CAMSHIFT = 10; // Numero de frames que camshift rastrea antes de volver a detectar rostros de nuevo.
-    const int MAX_ROSTROS = 4; // Numero maximo de rostros seguidos simultaneamente.
     bool usarSeguimientoCamShift = false; // Indica si se usa CamShift entre detecciones Haar.
     bool usarReconocimientoRostros = false; // Indica si se reconocen los rostros detectados, y muestra el nombre en el UI.
 
     std::thread hiloDeteccionRostros;
-    std::atomic<bool> flagDeteccionRostrosActivo{ false }; // Flag atomico que mantiene el hilo activo.
+    std::atomic<bool> flagProcesarVideoActivo{ false }; // Flag atomico que mantiene el hilo activo.
 
     Mat framePendienteProcesar; // Frame enviado desde MainWindow para su procesado con OpenCV. 
     Mat ultimoFrameProcesado; // Frame a ser enviado a MainWindow.

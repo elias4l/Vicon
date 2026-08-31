@@ -38,7 +38,7 @@ void ProcesarVideo::usarReconocimiento(bool valor)
 
 void ProcesarVideo::iniciarHiloProcesarFrames()
 {
-    if (flagDeteccionRostrosActivo) // No hacer nada si ya esta iniciado y procesando.
+    if (flagProcesarVideoActivo) // No hacer nada si ya esta iniciado y procesando.
     {
         return;
     }
@@ -47,13 +47,13 @@ void ProcesarVideo::iniciarHiloProcesarFrames()
         hiloDeteccionRostros.join();
     }
 
-    flagDeteccionRostrosActivo = true; // Flag de control del bucle principal en el hilo activado.
+    flagProcesarVideoActivo = true; // Flag de control del bucle principal en el hilo activado.
     hiloDeteccionRostros = std::thread(&ProcesarVideo::bucleProcesarFrames, this); // Iniciar hilo con funcion principal bucleProcesamiento().
 }
 
 void ProcesarVideo::detenerHiloProcesarFrames()
 {
-    flagDeteccionRostrosActivo = false; // Flag de ejecucion del bucle principal desactivado.
+    flagProcesarVideoActivo = false; // Flag de ejecucion del bucle principal desactivado.
     frameDisponible.notify_all(); // Despierta el hilo si estaba suspendido en espera de recibir un frame.
 
     if (hiloDeteccionRostros.joinable())
@@ -214,10 +214,10 @@ void ProcesarVideo::bucleProcesarFrames()
             std::unique_lock<std::mutex> bloqueo(mutexFrames); // Bloquear acceso compartido al frame, y suspender el hilo mientras espera al siguiente frame por procesar. Libera el mutex mientras espera, lo adquiere al despertar.
             frameDisponible.wait(bloqueo, [this]() 
             {
-                return !flagDeteccionRostrosActivo || hayFramePendienteProcesar; 
+                return !flagProcesarVideoActivo || hayFramePendienteProcesar; 
             }); // Cierra lamda y llama a wait().
 
-            if(!flagDeteccionRostrosActivo) // Finalizar bucle si se ordena detener el procesamiento.
+            if(!flagProcesarVideoActivo) // Finalizar bucle si se ordena detener el procesamiento.
             {
                 break; // Detener bucle while.
             }

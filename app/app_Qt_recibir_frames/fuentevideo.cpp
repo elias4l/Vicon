@@ -151,7 +151,7 @@ bool FuenteVideo::recibirFrame(bool color, std::vector<unsigned char>& frame) //
 
 void FuenteVideo::iniciarHiloFuenteVideo(bool color) // Inicia la recepcion de frames en un hilo separado.
 {
-    if (!dispFTDIConectado() || flagRecepcionActiva)
+    if (!dispFTDIConectado() || flagFuenteVideoActivo)
     {
         return; // No hay dispositivo conectado o ya el hilo ya esta activo.
     }
@@ -160,7 +160,7 @@ void FuenteVideo::iniciarHiloFuenteVideo(bool color) // Inicia la recepcion de f
     {
         hiloFuenteVideo.join(); // Esperar a que el hilo termine.
     }
-    flagRecepcionActiva = true;
+    flagFuenteVideoActivo = true;
     hiloFuenteVideo = std::thread(&FuenteVideo::bucleRecepcion, this, color); // Iniciar el hilo de recepcion de frames con bucleRecepcion().
 }
 
@@ -168,12 +168,12 @@ void FuenteVideo::bucleRecepcion(bool color) // Metodo principal. Bucle que soli
 {
     int intentosRecuperacion = 0; // En caso de fallo, intenta reconfigurarse tres veces antes de lanzar error.
     escribirLog("Inicio de la recepcion de frames (bucleRecepcion()).");
-    while (flagRecepcionActiva) // Flag que mantiene el bucle activo.
+    while (flagFuenteVideoActivo) // Flag que mantiene el bucle activo.
     {
         std::vector<unsigned char> frame; // Guarda los bytes del frame obtenido desde el dispositivo FTDI.
         if (!recibirFrame(color, frame)) // Error o no hay frame disponible.
         {
-            if (!flagRecepcionActiva) // recibirFrame detenido voluntariamente. Salir del bucle.
+            if (!flagFuenteVideoActivo) // recibirFrame detenido voluntariamente. Salir del bucle.
             {
                 break;
             }
@@ -187,7 +187,7 @@ void FuenteVideo::bucleRecepcion(bool color) // Metodo principal. Bucle que soli
                     ftHandle = nullptr;
                 }
                 vaciarRutaLog(); // Cerrar acceso al archivo log.
-                flagRecepcionActiva = false; // Se detiene la recepcion.
+                flagFuenteVideoActivo = false; // Se detiene la recepcion.
                 return;
             }
             intentosRecuperacion++; // Error de conexion, se intenta reconectar: cerrar dispositivo FTDI, conectar de nuevo, resetear FPGA, esperar 3 segundos.
@@ -206,7 +206,7 @@ void FuenteVideo::bucleRecepcion(bool color) // Metodo principal. Bucle que soli
                 enviarComando(0x80);
             }
             std::this_thread::sleep_for(std::chrono::seconds(3));
-            if (!flagRecepcionActiva)
+            if (!flagFuenteVideoActivo)
             {
                 break;
             }
@@ -233,7 +233,7 @@ void FuenteVideo::bucleRecepcion(bool color) // Metodo principal. Bucle que soli
 
 void FuenteVideo::detenerHiloFuenteVideo() // Detiene la recepcion de frames y espera a que el hilo termine.
 {
-    flagRecepcionActiva = false; // Detiene el bucle en bucleRecepcion().
+    flagFuenteVideoActivo = false; // Detiene el bucle en bucleRecepcion().
     if (hiloFuenteVideo.joinable())
     {
         hiloFuenteVideo.join(); // Esperar a que el hilo termine.
@@ -260,5 +260,5 @@ bool FuenteVideo::obtenerUltimoFrame(std::vector<unsigned char>& frame) // Copia
 
 bool FuenteVideo::recepcionActiva() const // Para detectar en MainWindow si el hilo de recepcion esta activo o se detuvo por algun error.
 {
-    return flagRecepcionActiva;
+    return flagFuenteVideoActivo;
 }

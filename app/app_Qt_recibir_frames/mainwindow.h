@@ -41,5 +41,5 @@ private:
     QImage convertirFrameBN(const std::vector<unsigned char>& frame); // Pasa de Y a RGB en escala de grises.
     int limitarColor(int valor); // Recorta a un valor entre 0 y 255.
     void actualizarDispositivosFTDI(); // Actualiza los dispositivos FTDI disponibles en el ComboBox.
+    void actualizarLedEstado(bool estado);
 };
-
