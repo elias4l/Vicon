@@ -63,7 +63,7 @@ MainWindow::MainWindow(QWidget *parent)
                 ui.buttonConectar->setText("Conectar");
                 ui.comboDispositivos->setEnabled(true);
                 ui.buttonActualizarDisp->setEnabled(true);
-                ui.labelVideo->setText("Sin seï¿½al de video.");
+                ui.labelVideo->setText("Sin señal de video.");
                 ui.buttonVideo->setEnabled(false);
                 ui.checkBoxVideoColor->setEnabled(false);
                 ui.checkBoxDetectarRostros->setEnabled(false);
@@ -327,7 +327,7 @@ void MainWindow::capturarUnFrame()
 //  YCbCr 4:2:2 -> RGB888.
 //===============================================
 
-// Convierte datos de video YCbCr 4:2:2 en piï¿½xeles RGB de 8 bits, formato que QImage necesita.
+// Convierte datos de video YCbCr 4:2:2 en pi­xeles RGB de 8 bits, formato que QImage necesita.
 QImage MainWindow::convertirFrameColor(const std::vector<unsigned char>& frame)
 {
     const int ancho = 640;  // VGA.
@@ -380,7 +380,7 @@ QImage MainWindow::convertirFrameColor(const std::vector<unsigned char>& frame)
 //  Luminancia Y -> RGB888.
 //===============================================
 
-// Convierte datos de video Y en piï¿½xeles RGB, usado por QImage.
+// Convierte datos de video Y en pi­xeles RGB, usado por QImage.
 QImage MainWindow::convertirFrameBN(const std::vector<unsigned char>& frame)
 {
     const int ancho = 640;  // VGA.

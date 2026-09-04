@@ -1,4 +1,4 @@
-// app_tx.cpp : Este archivo contiene la funciÃ³n "main". La ejecuciÃ³n del programa comienza y termina ahÃ­.
+// app_tx.cpp : Este archivo contiene la funcion "main". La ejecución del programa comienza y termina ahí.
 //
 
 #include <iostream>

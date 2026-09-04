@@ -1,4 +1,5 @@
 # Vivado
+*.xpr
 *.jou
 *.log
 *.str
@@ -83,3 +84,7 @@ obj/
 
 # Carpeta temporal/generada específica
 app_cont.c81d7d48/
+
+# Incluir íntegramente la distribución VICON
+!VICON/
+!VICON/**
